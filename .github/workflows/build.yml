@@ -23,25 +23,18 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.2'
+          flutter-version: '3.16.5'
           channel: 'stable'
           cache: true
-
-      - name: Build Clean Flutter Project
-        run: |
-          mkdir -p /tmp/user_code
-          if [ -d "lib" ]; then cp -r lib/* /tmp/user_code/; fi
-          if [ -f "pubspec.yaml" ]; then cp pubspec.yaml /tmp/user_code/; fi
-          
-          rm -rf ./* ./.github
-          
-          flutter create . --org com.tiba.project --project-name tiba_project --platforms android
-          
-          if [ -d "/tmp/user_code/lib" ]; then cp -r /tmp/user_code/lib/* lib/; fi
-          if [ -f "/tmp/user_code/pubspec.yaml" ]; then cp /tmp/user_code/pubspec.yaml pubspec.yaml; fi
 
       - name: Install Dependencies
         run: flutter pub get
 
       - name: Build Debug APK
-        run: flutter build apk --debug --
+        run: flutter build apk --debug --no-tree-shake-icons
+        
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tiba-Dashboard-APK
+          path: build/app/outputs/flutter-apk/app-debug.apk
