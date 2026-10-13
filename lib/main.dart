@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -23,7 +25,7 @@ class TibaLauncherApp extends StatelessWidget {
       title: 'Tiba 2 Cockpit Pro',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF050811),
+        scaffoldBackgroundColor: const Color(0xFF040711),
       ),
       home: const DashboardScreen(),
     );
@@ -38,26 +40,26 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  // سرعت بر اساس GPS مانیتور (کیلومتر بر ساعت)
+  // سرعت مانیتور GPS (کیلومتر بر ساعت)
   double _currentSpeed = 0.0;
-  String _gpsStatus = "GPS LOCKED (ONLINE)";
+  String _gpsStatus = "GPS LOCKED (ACTIVE)";
 
-  // تنظیمات ظاهری (قابل تنظیم از داخل پنل)
-  Color _themeColor = const Color(0xFF00E5FF); // آبی یخی پیش‌فرض
+  // تنظیمات نئون و تم
+  Color _themeColor = const Color(0xFF00E5FF); // آبی یخی اسپرت
   double _panelOpacity = 0.25;
-  double _neonGlow = 1.2;
+  double _neonGlow = 1.3;
 
   // انتخاب اپلیکیشن مسیریاب
   String _selectedNavApp = "Neshan";
   final List<String> _navApps = ["Neshan", "Balad", "Google Maps", "Waze"];
 
-  // موزیک پلیر اختصاصی
+  // موزیک پلیر اختصاصی داخلی
   bool _isPlaying = false;
   int _currentTrackIndex = 0;
   final List<Map<String, String>> _playlist = [
-    {"title": "Jaddeye Shomal - Mix", "artist": "Persian Chill Drive"},
-    {"title": "Deep Bass Electro", "artist": "Night Speed FX"},
-    {"title": "Tehran Nights Vibe", "artist": "Cyberpunk 2026"},
+    {"title": "Deep Bass Drive", "artist": "Persian Night Club"},
+    {"title": "Jaddeye Shomal Track", "artist": "Electronic Chill Mix"},
+    {"title": "Tehran Midnight Cruise", "artist": "Cyber Speed FX"},
   ];
 
   void _openSettingsDialog() {
@@ -69,7 +71,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             return BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
               child: AlertDialog(
-                backgroundColor: const Color(0xFF0B132B).withOpacity(0.94),
+                backgroundColor: const Color(0xFF0B132B).withOpacity(0.95),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(24),
                   side: BorderSide(color: _themeColor.withOpacity(0.6), width: 1.5),
@@ -78,17 +80,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   children: [
                     Icon(Icons.tune_rounded, color: _themeColor),
                     const SizedBox(width: 10),
-                    const Text('تنظیمات اختصاصی تیبا ۲', style: TextStyle(color: Colors.white, fontSize: 18)),
+                    const Text('تنظیمات اختصاصی تیبا ۲', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
                   ],
                 ),
                 content: SizedBox(
-                  width: 450,
+                  width: 440,
                   child: SingleChildScrollView(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text("پالت رنگی تم و نورپردازی:", style: TextStyle(color: Colors.white70, fontSize: 13)),
+                        const Text("پالت نورپردازی نئون کیلومتر:", style: TextStyle(color: Colors.white70, fontSize: 13)),
                         const SizedBox(height: 10),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -101,7 +103,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ],
                         ),
                         const SizedBox(height: 20),
-                        Text("انتخاب مسیریاب پیش‌فرض:", style: TextStyle(color: Colors.white70, fontSize: 13)),
+                        const Text("انتخاب اپلیکیشن مسیریاب:", style: TextStyle(color: Colors.white70, fontSize: 13)),
                         const SizedBox(height: 8),
                         DropdownButtonFormField<String>(
                           value: _selectedNavApp,
@@ -109,7 +111,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           style: const TextStyle(color: Colors.white, fontSize: 14),
                           decoration: InputDecoration(
                             filled: true,
-                            fillColor: Colors.white.withOpacity(0.05),
+                            fillColor: Colors.white.withOpacity(0.06),
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: _themeColor.withOpacity(0.3))),
                           ),
                           items: _navApps.map((app) => DropdownMenuItem(value: app, child: Text(app))).toList(),
@@ -121,7 +123,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           },
                         ),
                         const SizedBox(height: 20),
-                        Text("شفافیت پنل‌ها (گلس): ${(_panelOpacity * 100).toInt()}%", style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                        Text("شفافیت پنل شیشه‌ای: ${(_panelOpacity * 100).toInt()}%", style: const TextStyle(color: Colors.white70, fontSize: 13)),
                         Slider(
                           value: _panelOpacity,
                           min: 0.1,
@@ -132,7 +134,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             setState(() => _panelOpacity = val);
                           },
                         ),
-                        Text("شدت درخشش نئون: ${(_neonGlow * 100).toInt()}%", style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                        Text("شدت درخشش هاله نئون: ${(_neonGlow * 100).toInt()}%", style: const TextStyle(color: Colors.white70, fontSize: 13)),
                         Slider(
                           value: _neonGlow,
                           min: 0.5,
@@ -150,7 +152,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: Text('ذخیره و اعمال', style: TextStyle(color: _themeColor, fontSize: 16, fontWeight: FontWeight.bold)),
+                    child: Text('ذخیره و خروج', style: TextStyle(color: _themeColor, fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -176,7 +178,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           shape: BoxShape.circle,
           border: Border.all(color: isSelected ? Colors.white : Colors.transparent, width: 3),
           boxShadow: [
-            if (isSelected) BoxShadow(color: color.withOpacity(0.8), blurRadius: 12, spreadRadius: 2),
+            if (isSelected) BoxShadow(color: color.withOpacity(0.85), blurRadius: 14, spreadRadius: 2),
           ],
         ),
       ),
@@ -188,30 +190,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // پس‌زمینه دارک ریسینگ
+          // پس‌زمینه عمیق فیبر کربن و نایت ریسینگ
           Positioned.fill(
             child: Container(
               decoration: const BoxDecoration(
                 gradient: RadialGradient(
                   center: Alignment(0, -0.1),
-                  radius: 1.3,
-                  colors: [Color(0xFF0D1B2A), Color(0xFF030712)],
+                  radius: 1.35,
+                  colors: [Color(0xFF0F1E36), Color(0xFF030712)],
                 ),
               ),
             ),
           ),
 
-          // محتوای اصلی داشبورد (۳ ستون + داک میانبر پایین)
+          // ۳ ستون اصلی + داک کنترل
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(12.0),
               child: Column(
                 children: [
-                  // بخش اصلی ۳ ستونه
                   Expanded(
                     child: Row(
                       children: [
-                        // ستون چپ: مسیریاب انتخابی + موزیک پلیر اختصاصی
+                        // ستون ۱ (سمت چپ): مسیریاب انتخابی + موزیک پلیر داخلی
                         Expanded(
                           flex: 7,
                           child: Column(
@@ -225,7 +226,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                         const SizedBox(width: 12),
 
-                        // ستون وسط: کیلومترشمار مدرن خارجی (HUD)
+                        // ستون ۲ (وسط): کیلومترشمار مدرن خارجی (HUD Digital Cluster)
                         Expanded(
                           flex: 9,
                           child: _buildSpeedometerWidget(),
@@ -233,7 +234,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                         const SizedBox(width: 12),
 
-                        // ستون راست: عکس تیبا ۲ باکیفیت و وضعیت خودرو
+                        // ستون ۳ (سمت راست): عکس سه‌بعدی تیبا ۲ + اطلاعات وضعیت
                         Expanded(
                           flex: 7,
                           child: _buildVehicleStatusWidget(),
@@ -244,14 +245,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   const SizedBox(height: 10),
 
-                  // ردیف میانبرهای سریع (Dock Apps) در پایین
+                  // ردیف میانبرهای سریع پایین (Dock)
                   _buildBottomDock(),
                 ],
               ),
             ),
           ),
 
-          // دکمه تنظیمات بالا سمت راست
+          // آیکون چرخ‌دنده تنظیمات بالا
           Positioned(
             top: 14,
             right: 14,
@@ -267,7 +268,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: _themeColor.withOpacity(0.4)),
+                      border: Border.all(color: _themeColor.withOpacity(0.5)),
                     ),
                     child: Icon(Icons.settings_rounded, color: _themeColor, size: 22),
                   ),
@@ -291,7 +292,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             color: Colors.white.withOpacity(_panelOpacity),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: _themeColor.withOpacity(0.25),
+              color: _themeColor.withOpacity(0.28),
               width: 1.2,
             ),
           ),
@@ -301,12 +302,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ۱. ستون چپ: مسیریاب انتخابی
+  // ستون چپ: ویجت ناوبری
   Widget _buildNavigationWidget() {
     return GestureDetector(
       onTap: () {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('در حال اجرای برنامه‌ریزی مسیر با $_selectedNavApp...'), duration: const Duration(seconds: 2)),
+          SnackBar(content: Text('در حال اتصال به مسیر یاب $_selectedNavApp...'), duration: const Duration(seconds: 2)),
         );
       },
       child: _buildGlassCard(
@@ -344,8 +345,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    "برای اجرای $_selectedNavApp لمس کنید",
-                    style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 10, fontWeight: FontWeight.bold),
+                    "لمس جهت باز کردن $_selectedNavApp",
+                    style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 10, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -389,7 +390,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ],
           ),
-          // نوار پیشرفت آهنگ
           LinearProgressIndicator(
             value: 0.45,
             backgroundColor: Colors.white10,
@@ -412,7 +412,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: _themeColor.withOpacity(0.3),
+                    color: _themeColor.withOpacity(0.35),
                     shape: BoxShape.circle,
                     border: Border.all(color: _themeColor, width: 1.5),
                   ),
@@ -434,7 +434,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ۲. ستون وسط: کیلومترشمار اسپرت خارجی (HUD)
+  // کیلومترشمار مدرن HUD با دو حلقه نئونی
   Widget _buildSpeedometerWidget() {
     return GestureDetector(
       onLongPress: _openSettingsDialog,
@@ -478,12 +478,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Text(
                             _currentSpeed.toInt().toString(),
                             style: TextStyle(
-                              fontSize: 72,
+                              fontSize: 74,
                               fontWeight: FontWeight.w900,
                               color: Colors.white,
                               letterSpacing: -2,
                               shadows: [
-                                Shadow(color: _themeColor.withOpacity(0.9 * _neonGlow), blurRadius: 22),
+                                Shadow(color: _themeColor.withOpacity(0.9 * _neonGlow), blurRadius: 24),
                               ],
                             ),
                           ),
@@ -502,7 +502,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.35),
+                color: Colors.black.withOpacity(0.4),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.white10),
               ),
@@ -510,8 +510,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   _FooterInfo(title: "VEHICLE", val: "TIBA 2"),
-                  _FooterInfo(title: "GEAR", val: "AUTO/5M"),
-                  _FooterInfo(title: "STATUS", val: "READY"),
+                  _FooterInfo(title: "DRIVE MODE", val: "SPORT+"),
+                  _FooterInfo(title: "SENSORS", val: "OK"),
                 ],
               ),
             )
@@ -521,7 +521,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ۳. ستون راست: عکس باکیفیت تیبا ۲ و وضعیت خودرو
+  // پنل سه‌بعدی تیبا ۲
   Widget _buildVehicleStatusWidget() {
     return _buildGlassCard(
       child: Column(
@@ -530,7 +530,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("TIBA 2 COCKPIT", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1.1)),
+              const Text("TIBA 2 HATCHBACK", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1.1)),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
@@ -538,13 +538,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(color: _themeColor.withOpacity(0.5)),
                 ),
-                child: Text("SPORT", style: TextStyle(color: _themeColor, fontSize: 9, fontWeight: FontWeight.bold)),
+                child: Text("EDITION 2026", style: TextStyle(color: _themeColor, fontSize: 9, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
           const SizedBox(height: 8),
 
-          // عکس ماشین سه‌بعدی تیبا ۲
+          // نمایش خودروی تیبا ۲ سه‌بعدی
           Expanded(
             flex: 6,
             child: ClipRRect(
@@ -552,16 +552,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  // اگر عکس را در assets نگذاشتید، از رنگ و آیکون پشتیبان استفاده می‌شود یا عکس محلی
-                  Image.asset(
-                    'assets/tiba2.webp',
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(colors: [Colors.black87, const Color(0xFF0F172A)]),
+                  // خودرو با سایه‌های نئونی و رفلکس نور زیر بدنه
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: RadialGradient(
+                        center: const Alignment(0, 0.4),
+                        radius: 0.9,
+                        colors: [
+                          _themeColor.withOpacity(0.25),
+                          const Color(0xFF030712),
+                        ],
                       ),
-                      child: Center(
-                        child: Icon(Icons.directions_car_rounded, color: _themeColor, size: 48),
+                    ),
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.directions_car_filled_rounded, size: 76, color: Colors.white.withOpacity(0.9)),
+                          const SizedBox(height: 4),
+                          Container(
+                            height: 4,
+                            width: 110,
+                            decoration: BoxDecoration(
+                              color: _themeColor,
+                              borderRadius: BorderRadius.circular(4),
+                              boxShadow: [
+                                BoxShadow(color: _themeColor, blurRadius: 16, spreadRadius: 3),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -571,7 +591,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(6)),
-                      child: const Text("Hatchback Edition", style: TextStyle(color: Colors.white70, fontSize: 8)),
+                      child: const Text("Saipa Tiba 2 - Hatchback", style: TextStyle(color: Colors.white70, fontSize: 8)),
                     ),
                   )
                 ],
@@ -581,14 +601,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
           const SizedBox(height: 8),
 
-          // اطلاعات وضعیت
           Expanded(
             flex: 4,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _buildMiniStatusRow(Icons.bolt_rounded, "سیستم برق", "نرمال (14.2V)"),
-                _buildMiniStatusRow(Icons.thermostat_rounded, "دمای موتور", "بهینه (88°C)"),
+                _buildMiniStatusRow(Icons.bolt_rounded, "باتری و دینام", "14.2 V (شارژ کامل)"),
+                _buildMiniStatusRow(Icons.thermostat_rounded, "دمای آب موتور", "88°C (بهینه)"),
               ],
             ),
           ),
@@ -617,7 +636,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ۴. ردیف میانبرها (Dock Apps) در پایین صفحه
+  // ردیف داک میانبرها در پایین
   Widget _buildBottomDock() {
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
@@ -636,10 +655,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               _dockIcon(Icons.radio_rounded, "رادیو"),
               _dockIcon(Icons.music_note_rounded, "موزیک"),
-              _dockIcon(Icons.map_rounded, "مسیریاب"),
+              _dockIcon(Icons.navigation_rounded, "مسیریاب"),
               _dockIcon(Icons.bluetooth_audio_rounded, "بلوتوث"),
-              _dockIcon(Icons.settings_applications_rounded, "تنظیمات"),
-              _dockIcon(Icons.apps_rounded, "همه برنامه‌ها"),
+              _dockIcon(Icons.settings_suggest_rounded, "تنظیمات"),
+              _dockIcon(Icons.apps_rounded, "برنامه‌ها"),
             ],
           ),
         ),
@@ -651,7 +670,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return GestureDetector(
       onTap: () {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('اجرای میانبر: $label'), duration: const Duration(milliseconds: 1000)),
+          SnackBar(content: Text('میانبر: $label'), duration: const Duration(milliseconds: 900)),
         );
       },
       child: Column(
@@ -684,7 +703,7 @@ class _FooterInfo extends StatelessWidget {
   }
 }
 
-// نقاش کیلومترشمار مدرن خارجی (Cyber HUD Gauge)
+// رسم کلاستر مدرن دیجیتال کیلومترشمار
 class CyberClusterGaugePainter extends CustomPainter {
   final double speed;
   final double maxSpeed;
@@ -706,7 +725,6 @@ class CyberClusterGaugePainter extends CustomPainter {
     const startAngle = 2.3;
     const totalSweep = 4.8;
 
-    // خط زمینه کم‌نور
     final bgPaint = Paint()
       ..color = Colors.white.withOpacity(0.06)
       ..style = PaintingStyle.stroke
@@ -719,7 +737,6 @@ class CyberClusterGaugePainter extends CustomPainter {
     final currentSweep = totalSweep * progress;
 
     if (currentSweep > 0) {
-      // درخشش نئون
       final glowPaint = Paint()
         ..color = themeColor.withOpacity(0.5 * glowMultiplier)
         ..style = PaintingStyle.stroke
@@ -729,7 +746,6 @@ class CyberClusterGaugePainter extends CustomPainter {
 
       canvas.drawArc(Rect.fromCircle(center: center, radius: radius), startAngle, currentSweep, false, glowPaint);
 
-      // خط اصلی فعال
       final activePaint = Paint()
         ..color = themeColor
         ..style = PaintingStyle.stroke
