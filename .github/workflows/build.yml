@@ -1,52 +1,51 @@
-name: Build Flutter APK
+name: Build Tiba Launcher APK
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - name: Set up Java
+      - name: Set up Java 17
         uses: actions/setup-java@v3
         with:
-          distribution: 'zulu'
+          distribution: 'temurin'
           java-version: '17'
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.19.6'
           channel: 'stable'
 
-      - name: Setup Project Structure
+      - name: Scaffold Complete Project with GPS Permissions
         run: |
-          mkdir -p /tmp/my_lib
-          cp lib/main.dart /tmp/my_lib/main.dart
+          mkdir -p temp_app
+          cd temp_app
+          flutter create --org com.tiba.launcher --project-name tiba_launcher .
           
-          flutter create temp_app --org com.tiba.launcher --project-name tiba_project
+          # افزودن پکیج‌های لازم
+          flutter pub add geolocator
           
-          cp -r temp_app/android .
-          cp -r temp_app/ios .
-          cp -r temp_app/web .
-          cp -r temp_app/lib .
-          cp temp_app/pubspec.yaml .
-          cp temp_app/analysis_options.yaml .
+          # افزودن دسترسی‌های موقعیت مکانی به مانیفست اندروید
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' $MANIFEST
           
-          cp /tmp/my_lib/main.dart lib/main.dart
-          flutter pub get
+          # جایگزینی کد کاربر
+          cp -f ../lib/main.dart lib/main.dart
+          
+          # بیلد نهایی
+          flutter build apk --debug
 
-      - name: Build APK
-        run: flutter build apk --debug -v
-
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          name: Tiba2-Launcher-GPS-Final
+          path: temp_app/build/app/outputs/flutter-apk/app-debug.apk
