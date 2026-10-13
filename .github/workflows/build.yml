@@ -26,6 +26,26 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Recreate Standard Android Project
+        run: |
+          mkdir -p /tmp/backup
+          if [ -d "lib" ]; then cp -r lib /tmp/backup/; fi
+          if [ -f "pubspec.yaml" ]; then cp pubspec.yaml /tmp/backup/; fi
+
+          # پاکسازی فایل‌های قدیمی به جز ورک‌فلو
+          find . -maxdepth 1 ! -name '.github' ! -name '.' -exec rm -rf {} +
+
+          # ساخت پروژه استاندارد فلاتر
+          flutter create . --org com.tiba.project --project-name tiba_project --platforms android
+
+          # بازگرداندن کدهای اصلی شما
+          if [ -d "/tmp/backup/lib" ]; then cp -r /tmp/backup/lib/* lib/; fi
+          if [ -f "/tmp/backup/pubspec.yaml" ]; then cp /tmp/backup/pubspec.yaml pubspec.yaml; fi
+
+          # تنظیم رسمی و قطعی نسخه کاتلین در build.gradle
+          sed -i 's/ext.kotlin_version = .*/ext.kotlin_version = "1.9.20"/' android/build.gradle || true
+          sed -i 's/kotlin-android" version "[^"]*"/kotlin-android" version "1.9.20"/' android/settings.gradle || true
+
       - name: Install Dependencies
         run: flutter pub get
 
