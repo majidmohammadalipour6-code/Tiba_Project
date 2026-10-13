@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,12 +47,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   // انتخاب اپلیکیشن مسیریاب
   String _selectedNavApp = "نشان (Neshan)";
-  final List<String> _navApps = [
-    "نشان (Neshan)",
-    "بلد (Balad)",
-    "Google Maps",
-    "Waze"
-  ];
+  final Map<String, String> _navPackages = {
+    "نشان (Neshan)": "ir.neshan.map",
+    "بلد (Balad)": "ir.cafebazaar.balad",
+    "Google Maps": "com.google.android.apps.maps",
+    "Waze": "com.waze",
+  };
 
   // موزیک پلیر داخلی
   bool _isPlaying = false;
@@ -61,6 +62,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
     {"title": "Jaddeye Shomal Track", "artist": "Electronic Chill Mix"},
     {"title": "Tehran Midnight Cruise", "artist": "Cyber Speed FX"},
   ];
+
+  Future<void> _launchExternalApp(String packageName, String appName) async {
+    final uri = Uri.parse("intent://#Intent;package=$packageName;end;");
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+      } else {
+        final marketUri = Uri.parse("bazaar://details?id=$packageName");
+        if (await canLaunchUrl(marketUri)) {
+          await launchUrl(marketUri);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('برنامه $appName روی دستگاه یافت نشد.'), duration: const Duration(seconds: 2)),
+          );
+        }
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('خطا در اجرای $appName'), duration: const Duration(seconds: 2)),
+      );
+    }
+  }
 
   void _openSettingsDialog() {
     showDialog(
@@ -118,7 +141,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               borderSide: BorderSide(color: _themeColor.withOpacity(0.3)),
                             ),
                           ),
-                          items: _navApps.map((app) => DropdownMenuItem(value: app, child: Text(app))).toList(),
+                          items: _navPackages.keys.map((app) => DropdownMenuItem(value: app, child: Text(app))).toList(),
                           onChanged: (val) {
                             if (val != null) {
                               setModalState(() => _selectedNavApp = val);
@@ -185,7 +208,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // پس‌زمینه اسپرت
           Positioned.fill(
             child: Container(
               decoration: const BoxDecoration(
@@ -197,7 +219,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
           ),
-
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(10.0),
@@ -217,18 +238,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ],
                           ),
                         ),
-
                         const SizedBox(width: 10),
-
                         // ستون وسط: کیلومترشمار مدرن HUD
                         Expanded(
                           flex: 9,
                           child: _buildSpeedometerWidget(),
                         ),
-
                         const SizedBox(width: 10),
-
-                        // ستون راست: وضعیت خودروی تیبا ۲
+                        // ستون راست: عکس خودروی تیبا ۲ + اطلاعات
                         Expanded(
                           flex: 7,
                           child: _buildVehicleStatusWidget(),
@@ -236,17 +253,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 8),
-
-                  // داک پایین
                   _buildBottomDock(),
                 ],
               ),
             ),
           ),
-
-          // دکمه تنظیمات بالا سمت راست
           Positioned(
             top: 12,
             right: 12,
@@ -290,12 +302,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildNavigationWidget() {
     return GestureDetector(
       onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('در حال اجرای $_selectedNavApp...'),
-            duration: const Duration(seconds: 1),
-          ),
-        );
+        final pkg = _navPackages[_selectedNavApp] ?? "ir.neshan.map";
+        _launchExternalApp(pkg, _selectedNavApp);
       },
       child: _buildGlassCard(
         padding: EdgeInsets.zero,
@@ -332,7 +340,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     child: Icon(Icons.navigation_rounded, color: _themeColor, size: 26),
                   ),
                   const SizedBox(height: 6),
-                  const Text("لمس برای باز کردن نقشه",
+                  const Text("لمس برای اجرای مستقیم نقشه",
                       style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
                 ],
               ),
@@ -506,6 +514,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // پنل گرافیکی وکتوری تیبا ۲ هاچ‌بک با چراغ‌های روشن و رفلکس نئونی
   Widget _buildVehicleStatusWidget() {
     return _buildGlassCard(
       child: Column(
@@ -523,38 +532,70 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(color: _themeColor.withOpacity(0.5)),
                 ),
-                child: Text("HATCHBACK", style: TextStyle(color: _themeColor, fontSize: 8, fontWeight: FontWeight.bold)),
+                child: Text("EDITION 2026", style: TextStyle(color: _themeColor, fontSize: 8, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
           const SizedBox(height: 6),
           Expanded(
             flex: 6,
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: const Alignment(0, 0.3),
-                  radius: 0.85,
-                  colors: [_themeColor.withOpacity(0.2), const Color(0xFF030712)],
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: const Alignment(0, 0.3),
+                    radius: 0.9,
+                    colors: [_themeColor.withOpacity(0.3), const Color(0xFF030712)],
+                  ),
                 ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                child: Stack(
+                  alignment: Alignment.center,
                   children: [
-                    Icon(Icons.directions_car_filled_rounded, size: 68, color: Colors.white.withOpacity(0.92)),
-                    const SizedBox(height: 4),
-                    Container(
-                      height: 3,
-                      width: 90,
-                      decoration: BoxDecoration(
-                        color: _themeColor,
-                        borderRadius: BorderRadius.circular(3),
-                        boxShadow: [
-                          BoxShadow(color: _themeColor, blurRadius: 12, spreadRadius: 2),
-                        ],
+                    // افکت خط نور زیر خودرو (Ground Glow)
+                    Positioned(
+                      bottom: 12,
+                      child: Container(
+                        height: 6,
+                        width: 120,
+                        decoration: BoxDecoration(
+                          color: _themeColor,
+                          borderRadius: BorderRadius.circular(6),
+                          boxShadow: [
+                            BoxShadow(color: _themeColor, blurRadius: 18, spreadRadius: 4),
+                          ],
+                        ),
                       ),
+                    ),
+                    // گرافیک سه‌بعدی وکتور ماشین تیبا ۲ هاچ‌بک با چراغ‌های روشن
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(width: 8, height: 4, decoration: BoxDecoration(color: const Color(0xFF00FF88), borderRadius: BorderRadius.circular(2), boxShadow: const [BoxShadow(color: Color(0xFF00FF88), blurRadius: 8)] )),
+                            const SizedBox(width: 68),
+                            Container(width: 8, height: 4, decoration: BoxDecoration(color: const Color(0xFF00FF88), borderRadius: BorderRadius.circular(2), boxShadow: const [BoxShadow(color: Color(0xFF00FF88), blurRadius: 8)] )),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        const Icon(Icons.directions_car_filled_rounded, size: 68, color: Colors.white),
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(width: 10, height: 4, decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(2), boxShadow: const [BoxShadow(color: Colors.red, blurRadius: 8)] )),
+                            const SizedBox(width: 64),
+                            Container(width: 10, height: 4, decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(2), boxShadow: const [BoxShadow(color: Colors.red, blurRadius: 8)] )),
+                          ],
+                        ),
+                      ],
+                    ),
+                    Positioned(
+                      bottom: 4,
+                      left: 6,
+                      child: Text("3D Cyber Render", style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 8)),
                     ),
                   ],
                 ),
@@ -611,25 +652,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _dockIcon(Icons.radio_rounded, "رادیو"),
-            _dockIcon(Icons.music_note_rounded, "موزیک"),
-            _dockIcon(Icons.navigation_rounded, "مسیریاب"),
-            _dockIcon(Icons.bluetooth_audio_rounded, "بلوتوث"),
-            _dockIcon(Icons.settings_suggest_rounded, "تنظیمات"),
-            _dockIcon(Icons.apps_rounded, "برنامه‌ها"),
+            _dockIcon(Icons.radio_rounded, "رادیو", () {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('اجرای پخش رادیو FM')));
+            }),
+            _dockIcon(Icons.music_note_rounded, "موزیک", () {
+              setState(() => _isPlaying = !_isPlaying);
+            }),
+            _dockIcon(Icons.navigation_rounded, "مسیریاب", () {
+              final pkg = _navPackages[_selectedNavApp] ?? "ir.neshan.map";
+              _launchExternalApp(pkg, _selectedNavApp);
+            }),
+            _dockIcon(Icons.bluetooth_audio_rounded, "بلوتوث", () {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('مدیریت بلوتوث و تماس صوتی')));
+            }),
+            _dockIcon(Icons.settings_suggest_rounded, "تنظیمات", _openSettingsDialog),
+            _dockIcon(Icons.apps_rounded, "برنامه‌ها", () {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لیست برنامه‌های نصب‌شده ماشین')));
+            }),
           ],
         ),
       ),
     );
   }
 
-  Widget _dockIcon(IconData icon, String label) {
+  Widget _dockIcon(IconData icon, String label, VoidCallback onTap) {
     return GestureDetector(
-      onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('میانبر $label باز شد'), duration: const Duration(milliseconds: 700)),
-        );
-      },
+      onTap: onTap,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -659,7 +707,6 @@ class _FooterInfo extends StatelessWidget {
   }
 }
 
-// رسم کلاستر ضد کرش و سازگار با زاویه صفر
 class SafeCyberClusterPainter extends CustomPainter {
   final double speed;
   final double maxSpeed;
@@ -679,7 +726,6 @@ class SafeCyberClusterPainter extends CustomPainter {
     const startAngle = 2.3;
     const totalSweep = 4.8;
 
-    // رینگ پس‌زمینه
     final bgPaint = Paint()
       ..color = Colors.white.withOpacity(0.08)
       ..style = PaintingStyle.stroke
@@ -694,7 +740,6 @@ class SafeCyberClusterPainter extends CustomPainter {
       bgPaint,
     );
 
-    // محاسبه پیشرفت با شرط ایمن بودن زاویه
     final progress = (speed / maxSpeed).clamp(0.0, 1.0);
     final currentSweep = totalSweep * progress;
 
@@ -736,9 +781,4 @@ class RadarMapPainter extends CustomPainter {
     canvas.drawCircle(center, 40, gridPaint);
     canvas.drawCircle(center, 80, gridPaint);
     canvas.drawLine(Offset(0, center.dy), Offset(size.width, center.dy), gridPaint);
-    canvas.drawLine(Offset(center.dx, 0), Offset(center.dx, size.height), gridPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
+    c
