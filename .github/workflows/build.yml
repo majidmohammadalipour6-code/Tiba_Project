@@ -23,7 +23,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.6'
+          flutter-version: '3.16.5'
           channel: 'stable'
           cache: true
 
@@ -37,15 +37,6 @@ jobs:
           
           if [ -d "temp_lib" ] && [ "$(ls -A temp_lib)" ]; then rm -rf lib/* && cp -r temp_lib/* lib/; fi
           if [ -f "temp_pubspec.yaml" ]; then cp temp_pubspec.yaml pubspec.yaml; fi
-
-      - name: Fix Kotlin Version in Gradle
-        run: |
-          # اصلاح نسخه کاتلین در فایل build.gradle برای سازگاری کامل
-          if [ -f "android/build.gradle" ]; then
-            sed -i 's/ext.kotlin_version = .*/ext.kotlin_version = '\''1.9.22'\''/g' android/build.gradle
-          fi
-          # اگر فایل تنظیمات دیگری وجود دارد
-          find . -name "build.gradle" -exec sed -i 's/ext.kotlin_version = .*/ext.kotlin_version = '\''1.9.22'\''/g' {} +
 
       - name: Install Dependencies
         run: flutter pub get
