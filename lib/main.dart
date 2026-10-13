@@ -42,31 +42,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _initGPS() async {
-    bool serviceEnabled;
-    LocationPermission permission;
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
 
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return;
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return;
+      }
 
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) return;
-    }
+      if (permission == LocationPermission.deniedForever) return;
 
-    if (permission == LocationPermission.deniedForever) return;
-
-    _positionStream = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 1,
-      ),
-    ).listen((Position position) {
-      setState(() {
-        // تبدیل سرعت از متر بر ثانیه به کیلومتر بر ساعت
-        _currentSpeed = (position.speed * 3.6).clamp(0.0, 240.0);
+      _positionStream = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 1,
+        ),
+      ).listen((Position position) {
+        if (mounted) {
+          setState(() {
+            _currentSpeed = (position.speed * 3.6).clamp(0.0, 240.0);
+          });
+        }
       });
-    });
+    } catch (e) {
+      debugPrint('GPS Error: $e');
+    }
   }
 
   @override
@@ -75,14 +77,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.dispose();
   }
 
-  // باز کردن اپلیکیشن‌های ناوبر با اینتنت مستقیم
-  Future<void> _launchApp(String packageName, String universalUrl) async {
+  Future<void> _launchApp(String universalUrl) async {
     final Uri uri = Uri.parse(universalUrl);
     try {
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
       } else {
-        // حالت پشتیبان وب
         await launchUrl(Uri.parse('https://maps.google.com'), mode: LaunchMode.externalApplication);
       }
     } catch (e) {
@@ -100,7 +100,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       builder: (context) {
         return Container(
           padding: const EdgeInsets.all(24),
-          height: 250,
+          height: 220,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -135,7 +135,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           padding: const EdgeInsets.all(12.0),
           child: Column(
             children: [
-              // هدر بالا (نوار وضعیت + دکمه تنظیمات)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -150,11 +149,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
               ),
               const SizedBox(height: 10),
-              // بدنه اصلی ۳ ستونه
               Expanded(
                 child: Row(
                   children: [
-                    // ستون چپ: لانچر ناوبرها و موزیک پلیر
                     Expanded(
                       flex: 1,
                       child: Container(
@@ -169,11 +166,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           children: [
                             const Text('مسیریاب‌ها', style: TextStyle(color: Colors.white70, fontSize: 12)),
                             const SizedBox(height: 8),
-                            _buildNavButton('نشان', Colors.redAccent, () => _launchApp('ir.neshan.masir', 'nshn://')),
+                            _buildNavButton('نشان', Colors.redAccent, () => _launchApp('nshn://')),
                             const SizedBox(height: 6),
-                            _buildNavButton('بلد', Colors.greenAccent, () => _launchApp('ir.balad.map', 'balad://')),
+                            _buildNavButton('بلد', Colors.greenAccent, () => _launchApp('balad://')),
                             const SizedBox(height: 6),
-                            _buildNavButton('گوگل مپ', Colors.blueAccent, () => _launchApp('com.google.android.apps.maps', 'https://maps.google.com')),
+                            _buildNavButton('گوگل مپ', Colors.blueAccent, () => _launchApp('https://maps.google.com')),
                             const Spacer(),
                             const Divider(color: Colors.white24),
                             const Text('موزیک پلیر', style: TextStyle(color: Colors.white70, fontSize: 12)),
@@ -181,9 +178,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                IconButton(icon: const Icon(Icons.skip_previous, color: Colors.white), onPressed: () {}),
-                                IconButton(icon: const Icon(Icons.play_arrow, color: Color(0xFF00F0FF), size: 32), onPressed: () {}),
-                                IconButton(icon: const Icon(Icons.skip_next, color: Colors.white), onPressed: () {}),
+                                IconButton(icon: const Icon(Icons.skip_previous, color: Colors.white, size: 20), onPressed: () {}),
+                                IconButton(icon: const Icon(Icons.play_arrow, color: Color(0xFF00F0FF), size: 28), onPressed: () {}),
+                                IconButton(icon: const Icon(Icons.skip_next, color: Colors.white, size: 20), onPressed: () {}),
                               ],
                             ),
                           ],
@@ -191,7 +188,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    // ستون وسط: سرعت‌سنج دیجیتال نئونی (با قابلیت لمس ۳ ثانیه‌ای برای تنظیمات)
                     Expanded(
                       flex: 2,
                       child: GestureDetector(
@@ -213,8 +209,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Container(
-                                width: 180,
-                                height: 180,
+                                width: 170,
+                                height: 170,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   border: Border.all(color: const Color(0xFF00F0FF), width: 4),
@@ -230,7 +226,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                         _currentSpeed.toStringAsFixed(0),
                                         style: const TextStyle(
                                           color: Colors.white,
-                                          fontSize: 54,
+                                          fontSize: 52,
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
@@ -246,9 +242,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 15),
+                              const SizedBox(height: 12),
                               const Text(
-                                'برای تنظیمات، ۳ ثانیه روی سرعت‌سنج نگه دارید',
+                                '۳ ثانیه لمس سرعت‌سنج = تنظیمات',
                                 style: TextStyle(color: Colors.white38, fontSize: 10),
                                 textAlign: TextAlign.center,
                               ),
@@ -258,7 +254,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    // ستون راست: وضعیت تیبا ۲ (ولتاژ باتری و دمای آب)
                     Expanded(
                       flex: 1,
                       child: Container(
@@ -306,7 +301,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           foregroundColor: Colors.white,
           side: BorderSide(color: color),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 6),
         ),
         onPressed: onTap,
         child: Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
@@ -324,13 +319,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       child: Row(
         children: [
-          Icon(icon, color: color, size: 20),
+          Icon(icon, color: color, size: 18),
           const SizedBox(width: 8),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(title, style: const TextStyle(color: Colors.white60, fontSize: 9)),
-              Text(value, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.bold)),
+              Text(value, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold)),
             ],
           ),
         ],
