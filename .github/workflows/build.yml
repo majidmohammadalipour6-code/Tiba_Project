@@ -14,6 +14,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -22,14 +28,11 @@ jobs:
 
       - name: Setup Project Structure
         run: |
-          # ذخیره کردن فایل main.dart کاربر
           mkdir -p /tmp/my_lib
           cp lib/main.dart /tmp/my_lib/main.dart
           
-          # ساخت پروژه موقت در یک پوشه دیگر
           flutter create temp_app --org com.tiba.launcher --project-name tiba_project
           
-          # انتقال فایل‌ها و پوشه‌های ضروری به ریشه اصلی مخزن
           cp -r temp_app/android .
           cp -r temp_app/ios .
           cp -r temp_app/web .
@@ -37,7 +40,6 @@ jobs:
           cp temp_app/pubspec.yaml .
           cp temp_app/analysis_options.yaml .
           
-          # جایگزین کردن فایل main.dart سفارشی شما
           cp /tmp/my_lib/main.dart lib/main.dart
 
       - name: Build APK
