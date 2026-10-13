@@ -23,24 +23,20 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.6'
+          flutter-version: '3.13.9'
           channel: 'stable'
           cache: true
 
       - name: Build Clean Flutter Project
         run: |
-          # ذخیره فایل‌های lib و pubspec در مکانی امن
           mkdir -p /tmp/user_code
           if [ -d "lib" ]; then cp -r lib/* /tmp/user_code/; fi
           if [ -f "pubspec.yaml" ]; then cp pubspec.yaml /tmp/user_code/; fi
           
-          # پاکسازی فایل‌های قبلی مخزن برای جلوگیری از تداخل
           rm -rf ./* ./.github
           
-          # ساخت یک پروژه فلاتر کاملاً تازه و استاندارد
           flutter create . --org com.tiba.project --project-name tiba_project --platforms android
           
-          # بازگرداندن کدهای شما به پروژه تازه ساخته شده
           if [ -d "/tmp/user_code/lib" ]; then cp -r /tmp/user_code/lib/* lib/; fi
           if [ -f "/tmp/user_code/pubspec.yaml" ]; then cp /tmp/user_code/pubspec.yaml pubspec.yaml; fi
 
