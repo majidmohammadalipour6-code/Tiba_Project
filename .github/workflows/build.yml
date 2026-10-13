@@ -1,10 +1,10 @@
-name: Build Tiba Launcher APK
+name: Build Tiba Project APK
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ main, master ]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: [ main, master ]
 
 jobs:
   build:
@@ -27,26 +27,14 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Create Fresh Flutter Project
-        run: |
-          # ساخت یک پروژه موقت فلاتر با نام صحیح
-          flutter create temp_app --org com.tiba.launcher --platforms=android
-          
-          # انتقال پوشه اندروید و pubspec به پوشه اصلی ریپازیتوری
-          cp temp_app/pubspec.yaml ./pubspec.yaml
-          cp -r temp_app/android ./android
-          
-          # پاک کردن پوشه موقت
-          rm -rf temp_app
-
       - name: Install Dependencies
         run: flutter pub get
 
       - name: Build Debug APK
         run: flutter build apk --debug --no-tree-shake-icons
-
+        
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Tiba2-Debug-APK
+          name: Tiba-Dashboard-APK
           path: build/app/outputs/flutter-apk/app-debug.apk
