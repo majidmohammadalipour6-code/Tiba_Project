@@ -27,28 +27,14 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Create Project and Build APK
-        run: |
-          # ۱. ساخت پروژه موقت استاندارد
-          flutter create temp_app --org com.tiba.launcher --project-name tiba2_launcher --platforms=android
-          
-          # ۲. جایگزین کردن پوشه lib شما
-          rm -rf temp_app/lib
-          cp -r lib temp_app/
-          
-          # ۳. اضافه کردن درست پکیج‌ها به بخش dependencies
-          cd temp_app
-          sed -i '/dependencies:/a \  geolocator: ^11.0.0\n  url_launcher: ^6.2.5' pubspec.yaml
-          
-          # ۴. پاکسازی و دریافت پکیج‌ها
-          flutter clean
-          flutter pub get
-          
-          # ۵. بیلد APK با تنظیمات سازگار با اندروید
-          flutter build apk --debug --no-tree-shake-icons
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Build Debug APK
+        run: flutter build apk --debug --no-tree-shake-icons
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Tiba2-Debug-APK
-          path: temp_app/build/app/outputs/flutter-apk/app-debug.apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
