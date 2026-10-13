@@ -27,8 +27,17 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Create Android Structure if missing
-        run: flutter create . --platforms=android --org com.tiba.launcher
+      - name: Create Fresh Flutter Project
+        run: |
+          # ساخت یک پروژه موقت فلاتر با نام صحیح
+          flutter create temp_app --org com.tiba.launcher --platforms=android
+          
+          # انتقال پوشه اندروید و pubspec به پوشه اصلی ریپازیتوری
+          cp temp_app/pubspec.yaml ./pubspec.yaml
+          cp -r temp_app/android ./android
+          
+          # پاک کردن پوشه موقت
+          rm -rf temp_app
 
       - name: Install Dependencies
         run: flutter pub get
