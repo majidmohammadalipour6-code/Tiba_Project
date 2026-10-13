@@ -1,5 +1,5 @@
 name: tiba_project
-description: A futuristic car dashboard for Tiba 2
+description: "A new Flutter project for Tiba 2 car dashboard."
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -9,10 +9,12 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  url_launcher: ^6.2.5
   geolocator: ^10.1.0
+  url_launcher: ^6.2.2
 
 dev_dependencies:
+  flutter_test:
+    sdk: flutter_test
   flutter_lints: ^3.0.0
 
 flutter:
