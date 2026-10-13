@@ -1,5 +1,5 @@
 name: tiba_project
-description: A futuristic car dashboard launcher for Tiba 2.
+description: A futuristic car dashboard for Tiba 2.
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -10,6 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   url_launcher: ^6.2.5
+  geolocator: ^10.1.0
 
 dev_dependencies:
   flutter_test:
