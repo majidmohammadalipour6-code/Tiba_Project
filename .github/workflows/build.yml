@@ -36,12 +36,15 @@ jobs:
           rm -rf temp_app/lib
           cp -r lib temp_app/
           
-          # ۳. اضافه کردن درست پکیج‌ها به بخش dependencies در pubspec.yaml
+          # ۳. اضافه کردن درست پکیج‌ها به بخش dependencies
           cd temp_app
           sed -i '/dependencies:/a \  geolocator: ^11.0.0\n  url_launcher: ^6.2.5' pubspec.yaml
           
-          # ۴. گرفتن پکیج‌ها و ساخت فایل APK به صورت دیباگ
+          # ۴. پاکسازی و دریافت پکیج‌ها
+          flutter clean
           flutter pub get
+          
+          # ۵. بیلد APK با تنظیمات سازگار با اندروید
           flutter build apk --debug --no-tree-shake-icons
 
       - name: Upload APK Artifact
