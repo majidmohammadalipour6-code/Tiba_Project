@@ -23,7 +23,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.13.9'
+          flutter-version: '3.19.6'
           channel: 'stable'
           cache: true
 
@@ -39,6 +39,10 @@ jobs:
           
           if [ -d "/tmp/user_code/lib" ]; then cp -r /tmp/user_code/lib/* lib/; fi
           if [ -f "/tmp/user_code/pubspec.yaml" ]; then cp /tmp/user_code/pubspec.yaml pubspec.yaml; fi
+          
+          # اصلاح قطعی نسخه کاتلین برای برطرف شدن ارور Gradle
+          sed -i -E 's/ext\.kotlin_version = .*/ext.kotlin_version = "1.9.22"/' android/build.gradle || true
+          sed -i -E "s/id 'org.jetbrains.kotlin.android' version .*/id 'org.jetbrains.kotlin.android' version '1.9.22' apply false/" android/settings.gradle || true
 
       - name: Install Dependencies
         run: flutter pub get
