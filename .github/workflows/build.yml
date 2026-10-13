@@ -13,7 +13,7 @@ jobs:
         with:
           flutter-version: '3.x'
 
-      - name: Create Flutter Project Structure if Missing
+      - name: Create Flutter Project Structure
         run: |
           if [ ! -f "pubspec.yaml" ]; then
             flutter create . --org com.tiba.launcher --project-name tiba2_launcher
@@ -25,7 +25,7 @@ jobs:
         run: flutter build apk --release
 
       - name: Upload APK
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: app-release
           path: build/app/outputs/flutter-apk/app-release.apk
