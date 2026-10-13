@@ -1,5 +1,5 @@
-name: tiba_project
-description: "A new Flutter project for Tiba 2 car dashboard."
+name: tiba2_launcher
+description: A futuristic Tiba 2 car infotainment launcher.
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -14,7 +14,7 @@ dependencies:
 
 dev_dependencies:
   flutter_test:
-    sdk: flutter_test
+    sdk: flutter
   flutter_lints: ^3.0.0
 
 flutter:
