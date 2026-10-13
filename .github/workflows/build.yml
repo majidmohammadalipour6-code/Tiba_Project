@@ -27,16 +27,22 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Create Standard Flutter Project Structure
+      - name: Build Clean Flutter Project
         run: |
-          mkdir -p temp_lib
-          if [ -d "lib" ]; then cp -r lib/* temp_lib/; fi
-          if [ -f "pubspec.yaml" ]; then cp pubspec.yaml temp_pubspec.yaml; fi
+          # ذخیره فایل‌های lib و pubspec در مکانی امن
+          mkdir -p /tmp/user_code
+          if [ -d "lib" ]; then cp -r lib/* /tmp/user_code/; fi
+          if [ -f "pubspec.yaml" ]; then cp pubspec.yaml /tmp/user_code/; fi
           
+          # پاکسازی فایل‌های قبلی مخزن برای جلوگیری از تداخل
+          rm -rf ./* ./.github
+          
+          # ساخت یک پروژه فلاتر کاملاً تازه و استاندارد
           flutter create . --org com.tiba.project --project-name tiba_project --platforms android
           
-          if [ -d "temp_lib" ] && [ "$(ls -A temp_lib)" ]; then rm -rf lib/* && cp -r temp_lib/* lib/; fi
-          if [ -f "temp_pubspec.yaml" ]; then cp temp_pubspec.yaml pubspec.yaml; fi
+          # بازگرداندن کدهای شما به پروژه تازه ساخته شده
+          if [ -d "/tmp/user_code/lib" ]; then cp -r /tmp/user_code/lib/* lib/; fi
+          if [ -f "/tmp/user_code/pubspec.yaml" ]; then cp /tmp/user_code/pubspec.yaml pubspec.yaml; fi
 
       - name: Install Dependencies
         run: flutter pub get
