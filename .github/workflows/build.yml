@@ -20,18 +20,25 @@ jobs:
           flutter-version: '3.16.x'
           channel: 'stable'
 
-      - name: Create Flutter Project Structure
+      - name: Setup Project Structure
         run: |
-          # پاک کردن موقت فایل‌های ورک‌فلو برای ساخت پروژه
-          mkdir temp_lib
-          cp lib/main.dart temp_lib/main.dart
+          # ذخیره کردن فایل main.dart کاربر
+          mkdir -p /tmp/my_lib
+          cp lib/main.dart /tmp/my_lib/main.dart
           
-          # ساخت پروژه جدید فلاتر در پوشه جاری
-          flutter create . --org com.tiba.launcher --project-name tiba_project --force
+          # ساخت پروژه موقت در یک پوشه دیگر
+          flutter create temp_app --org com.tiba.launcher --project-name tiba_project
           
-          # برگرداندن فایل main.dart سفارشی خودمان
-          mkdir -p lib
-          cp temp_lib/main.dart lib/main.dart
+          # انتقال فایل‌ها و پوشه‌های ضروری به ریشه اصلی مخزن
+          cp -r temp_app/android .
+          cp -r temp_app/ios .
+          cp -r temp_app/web .
+          cp -r temp_app/lib .
+          cp temp_app/pubspec.yaml .
+          cp temp_app/analysis_options.yaml .
+          
+          # جایگزین کردن فایل main.dart سفارشی شما
+          cp /tmp/my_lib/main.dart lib/main.dart
 
       - name: Build APK
         run: flutter build apk --debug
