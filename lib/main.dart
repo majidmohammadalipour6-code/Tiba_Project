@@ -1,7 +1,3 @@
-import 'dart:async';
-import 'dart:convert';
-import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -40,20 +36,24 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  // سرعت مانیتور GPS (کیلومتر بر ساعت)
+  // سرعت بر حسب کیلومتر بر ساعت
   double _currentSpeed = 0.0;
-  String _gpsStatus = "GPS LOCKED (ACTIVE)";
+  final String _gpsStatus = "GPS LOCKED (ACTIVE)";
 
   // تنظیمات نئون و تم
   Color _themeColor = const Color(0xFF00E5FF); // آبی یخی اسپرت
   double _panelOpacity = 0.25;
-  double _neonGlow = 1.3;
 
   // انتخاب اپلیکیشن مسیریاب
-  String _selectedNavApp = "Neshan";
-  final List<String> _navApps = ["Neshan", "Balad", "Google Maps", "Waze"];
+  String _selectedNavApp = "نشان (Neshan)";
+  final List<String> _navApps = [
+    "نشان (Neshan)",
+    "بلد (Balad)",
+    "Google Maps",
+    "Waze"
+  ];
 
-  // موزیک پلیر اختصاصی داخلی
+  // موزیک پلیر داخلی
   bool _isPlaying = false;
   int _currentTrackIndex = 0;
   final List<Map<String, String>> _playlist = [
@@ -69,50 +69,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return StatefulBuilder(
           builder: (context, setModalState) {
             return BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
               child: AlertDialog(
                 backgroundColor: const Color(0xFF0B132B).withOpacity(0.95),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(20),
                   side: BorderSide(color: _themeColor.withOpacity(0.6), width: 1.5),
                 ),
                 title: Row(
                   children: [
                     Icon(Icons.tune_rounded, color: _themeColor),
                     const SizedBox(width: 10),
-                    const Text('تنظیمات اختصاصی تیبا ۲', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
+                    const Text('تنظیمات اختصاصی تیبا ۲',
+                        style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                   ],
                 ),
                 content: SizedBox(
-                  width: 440,
+                  width: 420,
                   child: SingleChildScrollView(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text("پالت نورپردازی نئون کیلومتر:", style: TextStyle(color: Colors.white70, fontSize: 13)),
+                        const Text("رنگ نئون و نشانگرها:", style: TextStyle(color: Colors.white70, fontSize: 13)),
                         const SizedBox(height: 10),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [
-                            _colorChoice(const Color(0xFF00E5FF), setModalState), // آبی یخی
-                            _colorChoice(const Color(0xFF00FF88), setModalState), // سبز لیمویی
-                            _colorChoice(const Color(0xFFFF9900), setModalState), // کهربایی ریسینگ
-                            _colorChoice(const Color(0xFFBD00FF), setModalState), // بنفش سایبرپانک
-                            _colorChoice(const Color(0xFFFF2A55), setModalState), // قرمز آتشین
+                            _colorChoice(const Color(0xFF00E5FF), setModalState),
+                            _colorChoice(const Color(0xFF00FF88), setModalState),
+                            _colorChoice(const Color(0xFFFF9900), setModalState),
+                            _colorChoice(const Color(0xFFBD00FF), setModalState),
+                            _colorChoice(const Color(0xFFFF2A55), setModalState),
                           ],
                         ),
-                        const SizedBox(height: 20),
-                        const Text("انتخاب اپلیکیشن مسیریاب:", style: TextStyle(color: Colors.white70, fontSize: 13)),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 18),
+                        const Text("مسیریاب پیش‌فرض سمت چپ:", style: TextStyle(color: Colors.white70, fontSize: 13)),
+                        const SizedBox(height: 6),
                         DropdownButtonFormField<String>(
                           value: _selectedNavApp,
                           dropdownColor: const Color(0xFF0F172A),
-                          style: const TextStyle(color: Colors.white, fontSize: 14),
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
                           decoration: InputDecoration(
                             filled: true,
                             fillColor: Colors.white.withOpacity(0.06),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: _themeColor.withOpacity(0.3))),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: _themeColor.withOpacity(0.3)),
+                            ),
                           ),
                           items: _navApps.map((app) => DropdownMenuItem(value: app, child: Text(app))).toList(),
                           onChanged: (val) {
@@ -122,8 +126,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             }
                           },
                         ),
-                        const SizedBox(height: 20),
-                        Text("شفافیت پنل شیشه‌ای: ${(_panelOpacity * 100).toInt()}%", style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                        const SizedBox(height: 16),
+                        Text("شفافیت پنل شیشه‌ای: ${(_panelOpacity * 100).toInt()}%",
+                            style: const TextStyle(color: Colors.white70, fontSize: 13)),
                         Slider(
                           value: _panelOpacity,
                           min: 0.1,
@@ -134,17 +139,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             setState(() => _panelOpacity = val);
                           },
                         ),
-                        Text("شدت درخشش هاله نئون: ${(_neonGlow * 100).toInt()}%", style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                        Slider(
-                          value: _neonGlow,
-                          min: 0.5,
-                          max: 2.0,
-                          activeColor: _themeColor,
-                          onChanged: (val) {
-                            setModalState(() => _neonGlow = val);
-                            setState(() => _neonGlow = val);
-                          },
-                        ),
                       ],
                     ),
                   ),
@@ -152,7 +146,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: Text('ذخیره و خروج', style: TextStyle(color: _themeColor, fontSize: 16, fontWeight: FontWeight.bold)),
+                    child: Text('تایید و بازگشت',
+                        style: TextStyle(color: _themeColor, fontSize: 15, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -164,21 +159,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _colorChoice(Color color, StateSetter setModalState) {
-    bool isSelected = _themeColor.value == color.value;
+    final isSelected = _themeColor.value == color.value;
     return GestureDetector(
       onTap: () {
         setModalState(() => _themeColor = color);
         setState(() => _themeColor = color);
       },
       child: Container(
-        width: 38,
-        height: 38,
+        width: 36,
+        height: 36,
         decoration: BoxDecoration(
           color: color,
           shape: BoxShape.circle,
           border: Border.all(color: isSelected ? Colors.white : Colors.transparent, width: 3),
           boxShadow: [
-            if (isSelected) BoxShadow(color: color.withOpacity(0.85), blurRadius: 14, spreadRadius: 2),
+            if (isSelected) BoxShadow(color: color.withOpacity(0.8), blurRadius: 12, spreadRadius: 2),
           ],
         ),
       ),
@@ -190,51 +185,50 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // پس‌زمینه عمیق فیبر کربن و نایت ریسینگ
+          // پس‌زمینه اسپرت
           Positioned.fill(
             child: Container(
               decoration: const BoxDecoration(
                 gradient: RadialGradient(
                   center: Alignment(0, -0.1),
-                  radius: 1.35,
+                  radius: 1.3,
                   colors: [Color(0xFF0F1E36), Color(0xFF030712)],
                 ),
               ),
             ),
           ),
 
-          // ۳ ستون اصلی + داک کنترل
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.all(12.0),
+              padding: const EdgeInsets.all(10.0),
               child: Column(
                 children: [
                   Expanded(
                     child: Row(
                       children: [
-                        // ستون ۱ (سمت چپ): مسیریاب انتخابی + موزیک پلیر داخلی
+                        // ستون چپ: مسیریاب + موزیک پلیر
                         Expanded(
                           flex: 7,
                           child: Column(
                             children: [
                               Expanded(flex: 5, child: _buildNavigationWidget()),
-                              const SizedBox(height: 10),
+                              const SizedBox(height: 8),
                               Expanded(flex: 5, child: _buildMusicPlayerWidget()),
                             ],
                           ),
                         ),
 
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 10),
 
-                        // ستون ۲ (وسط): کیلومترشمار مدرن خارجی (HUD Digital Cluster)
+                        // ستون وسط: کیلومترشمار مدرن HUD
                         Expanded(
                           flex: 9,
                           child: _buildSpeedometerWidget(),
                         ),
 
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 10),
 
-                        // ستون ۳ (سمت راست): عکس سه‌بعدی تیبا ۲ + اطلاعات وضعیت
+                        // ستون راست: وضعیت خودروی تیبا ۲
                         Expanded(
                           flex: 7,
                           child: _buildVehicleStatusWidget(),
@@ -243,36 +237,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
 
-                  // ردیف میانبرهای سریع پایین (Dock)
+                  // داک پایین
                   _buildBottomDock(),
                 ],
               ),
             ),
           ),
 
-          // آیکون چرخ‌دنده تنظیمات بالا
+          // دکمه تنظیمات بالا سمت راست
           Positioned(
-            top: 14,
-            right: 14,
+            top: 12,
+            right: 12,
             child: GestureDetector(
               onTap: _openSettingsDialog,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                  child: Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: _themeColor.withOpacity(0.5)),
-                    ),
-                    child: Icon(Icons.settings_rounded, color: _themeColor, size: 22),
-                  ),
+              child: Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _themeColor.withOpacity(0.5)),
                 ),
+                child: Icon(Icons.settings_rounded, color: _themeColor, size: 20),
               ),
             ),
           ),
@@ -283,18 +271,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildGlassCard({required Widget child, EdgeInsetsGeometry? padding}) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(18),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
-          padding: padding ?? const EdgeInsets.all(12),
+          padding: padding ?? const EdgeInsets.all(10),
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(_panelOpacity),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: _themeColor.withOpacity(0.28),
-              width: 1.2,
-            ),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: _themeColor.withOpacity(0.25), width: 1.2),
           ),
           child: child,
         ),
@@ -302,12 +287,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ستون چپ: ویجت ناوبری
   Widget _buildNavigationWidget() {
     return GestureDetector(
       onTap: () {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('در حال اتصال به مسیر یاب $_selectedNavApp...'), duration: const Duration(seconds: 2)),
+          SnackBar(
+            content: Text('در حال اجرای $_selectedNavApp...'),
+            duration: const Duration(seconds: 1),
+          ),
         );
       },
       child: _buildGlassCard(
@@ -320,13 +307,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
             Positioned(
-              top: 10,
-              left: 12,
+              top: 8,
+              left: 10,
               child: Row(
                 children: [
-                  Icon(Icons.explore_rounded, color: _themeColor, size: 18),
+                  Icon(Icons.explore_rounded, color: _themeColor, size: 16),
                   const SizedBox(width: 6),
-                  Text("NAV: $_selectedNavApp", style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
+                  Text(_selectedNavApp,
+                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
@@ -335,19 +323,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       color: _themeColor.withOpacity(0.2),
                       shape: BoxShape.circle,
                       border: Border.all(color: _themeColor, width: 1.5),
                     ),
-                    child: Icon(Icons.navigation_rounded, color: _themeColor, size: 28),
+                    child: Icon(Icons.navigation_rounded, color: _themeColor, size: 26),
                   ),
                   const SizedBox(height: 6),
-                  Text(
-                    "لمس جهت باز کردن $_selectedNavApp",
-                    style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 10, fontWeight: FontWeight.bold),
-                  ),
+                  const Text("لمس برای باز کردن نقشه",
+                      style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
@@ -357,7 +343,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // موزیک پلیر اختصاصی داخلی
   Widget _buildMusicPlayerWidget() {
     final track = _playlist[_currentTrackIndex];
     return _buildGlassCard(
@@ -367,31 +352,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Row(
             children: [
               Container(
-                width: 36,
-                height: 36,
+                width: 34,
+                height: 34,
                 decoration: BoxDecoration(
-                  color: _themeColor.withOpacity(0.25),
-                  borderRadius: BorderRadius.circular(10),
+                  color: _themeColor.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: _themeColor.withOpacity(0.5)),
                 ),
-                child: Icon(Icons.music_note_rounded, color: _themeColor, size: 20),
+                child: Icon(Icons.music_note_rounded, color: _themeColor, size: 18),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(track["title"]!, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 2),
-                    Text(track["artist"]!, style: const TextStyle(color: Colors.white54, fontSize: 10)),
+                    Text(track["title"]!,
+                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis),
+                    Text(track["artist"]!,
+                        style: const TextStyle(color: Colors.white54, fontSize: 9)),
                   ],
                 ),
               ),
             ],
           ),
           LinearProgressIndicator(
-            value: 0.45,
+            value: 0.4,
             backgroundColor: Colors.white10,
             color: _themeColor,
             minHeight: 3,
@@ -400,7 +387,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               IconButton(
-                icon: const Icon(Icons.skip_previous_rounded, color: Colors.white, size: 22),
+                icon: const Icon(Icons.skip_previous_rounded, color: Colors.white, size: 20),
                 onPressed: () {
                   setState(() {
                     _currentTrackIndex = (_currentTrackIndex - 1 + _playlist.length) % _playlist.length;
@@ -410,17 +397,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
               GestureDetector(
                 onTap: () => setState(() => _isPlaying = !_isPlaying),
                 child: Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(7),
                   decoration: BoxDecoration(
-                    color: _themeColor.withOpacity(0.35),
+                    color: _themeColor.withOpacity(0.3),
                     shape: BoxShape.circle,
                     border: Border.all(color: _themeColor, width: 1.5),
                   ),
-                  child: Icon(_isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Colors.white, size: 22),
+                  child: Icon(_isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Colors.white, size: 20),
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.skip_next_rounded, color: Colors.white, size: 22),
+                icon: const Icon(Icons.skip_next_rounded, color: Colors.white, size: 20),
                 onPressed: () {
                   setState(() {
                     _currentTrackIndex = (_currentTrackIndex + 1) % _playlist.length;
@@ -434,7 +421,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // کیلومترشمار مدرن HUD با دو حلقه نئونی
   Widget _buildSpeedometerWidget() {
     return GestureDetector(
       onLongPress: _openSettingsDialog,
@@ -448,28 +434,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   children: [
                     Container(width: 8, height: 8, decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF00FF88))),
                     const SizedBox(width: 6),
-                    Text(_gpsStatus, style: const TextStyle(fontSize: 9, letterSpacing: 1.0, color: Color(0xFF00FF88), fontWeight: FontWeight.bold)),
+                    Text(_gpsStatus,
+                        style: const TextStyle(fontSize: 8, color: Color(0xFF00FF88), fontWeight: FontWeight.bold, letterSpacing: 0.8)),
                   ],
                 ),
-                Text("HOLD FOR SETTINGS", style: TextStyle(fontSize: 8, color: Colors.white.withOpacity(0.4), letterSpacing: 1.0)),
+                Text("تنظیمات: لمس ۳ ثانیه",
+                    style: TextStyle(fontSize: 8, color: Colors.white.withOpacity(0.4))),
               ],
             ),
-
             Expanded(
               child: Center(
                 child: SizedBox(
-                  width: 230,
-                  height: 230,
+                  width: 210,
+                  height: 210,
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
                       CustomPaint(
-                        size: const Size(230, 230),
-                        painter: CyberClusterGaugePainter(
+                        size: const Size(210, 210),
+                        painter: SafeCyberClusterPainter(
                           speed: _currentSpeed,
                           maxSpeed: 220,
                           themeColor: _themeColor,
-                          glowMultiplier: _neonGlow,
                         ),
                       ),
                       Column(
@@ -478,18 +464,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Text(
                             _currentSpeed.toInt().toString(),
                             style: TextStyle(
-                              fontSize: 74,
+                              fontSize: 66,
                               fontWeight: FontWeight.w900,
                               color: Colors.white,
                               letterSpacing: -2,
                               shadows: [
-                                Shadow(color: _themeColor.withOpacity(0.9 * _neonGlow), blurRadius: 24),
+                                Shadow(color: _themeColor.withOpacity(0.9), blurRadius: 20),
                               ],
                             ),
                           ),
                           const Text(
                             "KM / H",
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.white70, letterSpacing: 3),
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.white70, letterSpacing: 2.5),
                           ),
                         ],
                       ),
@@ -498,12 +484,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
             ),
-
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
                 color: Colors.black.withOpacity(0.4),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: Colors.white10),
               ),
               child: const Row(
@@ -511,7 +496,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 children: [
                   _FooterInfo(title: "VEHICLE", val: "TIBA 2"),
                   _FooterInfo(title: "DRIVE MODE", val: "SPORT+"),
-                  _FooterInfo(title: "SENSORS", val: "OK"),
+                  _FooterInfo(title: "SYSTEM", val: "OK"),
                 ],
               ),
             )
@@ -521,7 +506,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // پنل سه‌بعدی تیبا ۲
   Widget _buildVehicleStatusWidget() {
     return _buildGlassCard(
       child: Column(
@@ -530,84 +514,61 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("TIBA 2 HATCHBACK", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1.1)),
+              const Text("TIBA 2 HATCHBACK",
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 1.0)),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: _themeColor.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(color: _themeColor.withOpacity(0.5)),
                 ),
-                child: Text("EDITION 2026", style: TextStyle(color: _themeColor, fontSize: 9, fontWeight: FontWeight.bold)),
+                child: Text("HATCHBACK", style: TextStyle(color: _themeColor, fontSize: 8, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-
-          // نمایش خودروی تیبا ۲ سه‌بعدی
+          const SizedBox(height: 6),
           Expanded(
             flex: 6,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  // خودرو با سایه‌های نئونی و رفلکس نور زیر بدنه
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: RadialGradient(
-                        center: const Alignment(0, 0.4),
-                        radius: 0.9,
-                        colors: [
-                          _themeColor.withOpacity(0.25),
-                          const Color(0xFF030712),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: const Alignment(0, 0.3),
+                  radius: 0.85,
+                  colors: [_themeColor.withOpacity(0.2), const Color(0xFF030712)],
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.directions_car_filled_rounded, size: 68, color: Colors.white.withOpacity(0.92)),
+                    const SizedBox(height: 4),
+                    Container(
+                      height: 3,
+                      width: 90,
+                      decoration: BoxDecoration(
+                        color: _themeColor,
+                        borderRadius: BorderRadius.circular(3),
+                        boxShadow: [
+                          BoxShadow(color: _themeColor, blurRadius: 12, spreadRadius: 2),
                         ],
                       ),
                     ),
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.directions_car_filled_rounded, size: 76, color: Colors.white.withOpacity(0.9)),
-                          const SizedBox(height: 4),
-                          Container(
-                            height: 4,
-                            width: 110,
-                            decoration: BoxDecoration(
-                              color: _themeColor,
-                              borderRadius: BorderRadius.circular(4),
-                              boxShadow: [
-                                BoxShadow(color: _themeColor, blurRadius: 16, spreadRadius: 3),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 6,
-                    left: 6,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(6)),
-                      child: const Text("Saipa Tiba 2 - Hatchback", style: TextStyle(color: Colors.white70, fontSize: 8)),
-                    ),
-                  )
-                ],
+                  ],
+                ),
               ),
             ),
           ),
-
-          const SizedBox(height: 8),
-
+          const SizedBox(height: 6),
           Expanded(
             flex: 4,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _buildMiniStatusRow(Icons.bolt_rounded, "باتری و دینام", "14.2 V (شارژ کامل)"),
-                _buildMiniStatusRow(Icons.thermostat_rounded, "دمای آب موتور", "88°C (بهینه)"),
+                _buildMiniStatusRow(Icons.bolt_rounded, "باتری و دینام", "14.2 V"),
+                _buildMiniStatusRow(Icons.thermostat_rounded, "دمای آب موتور", "88°C"),
               ],
             ),
           ),
@@ -618,7 +579,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildMiniStatusRow(IconData icon, String label, String val) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.04),
         borderRadius: BorderRadius.circular(8),
@@ -626,41 +587,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       child: Row(
         children: [
-          Icon(icon, size: 14, color: _themeColor),
-          const SizedBox(width: 8),
-          Text(label, style: const TextStyle(fontSize: 10, color: Colors.white70)),
+          Icon(icon, size: 13, color: _themeColor),
+          const SizedBox(width: 6),
+          Text(label, style: const TextStyle(fontSize: 9, color: Colors.white70)),
           const Spacer(),
-          Text(val, style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)),
+          Text(val, style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold)),
         ],
       ),
     );
   }
 
-  // ردیف داک میانبرها در پایین
   Widget _buildBottomDock() {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Container(
-          height: 52,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: _themeColor.withOpacity(0.3)),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _dockIcon(Icons.radio_rounded, "رادیو"),
-              _dockIcon(Icons.music_note_rounded, "موزیک"),
-              _dockIcon(Icons.navigation_rounded, "مسیریاب"),
-              _dockIcon(Icons.bluetooth_audio_rounded, "بلوتوث"),
-              _dockIcon(Icons.settings_suggest_rounded, "تنظیمات"),
-              _dockIcon(Icons.apps_rounded, "برنامه‌ها"),
-            ],
-          ),
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        height: 48,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _themeColor.withOpacity(0.3)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _dockIcon(Icons.radio_rounded, "رادیو"),
+            _dockIcon(Icons.music_note_rounded, "موزیک"),
+            _dockIcon(Icons.navigation_rounded, "مسیریاب"),
+            _dockIcon(Icons.bluetooth_audio_rounded, "بلوتوث"),
+            _dockIcon(Icons.settings_suggest_rounded, "تنظیمات"),
+            _dockIcon(Icons.apps_rounded, "برنامه‌ها"),
+          ],
         ),
       ),
     );
@@ -670,13 +627,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return GestureDetector(
       onTap: () {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('میانبر: $label'), duration: const Duration(milliseconds: 900)),
+          SnackBar(content: Text('میانبر $label باز شد'), duration: const Duration(milliseconds: 700)),
         );
       },
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: _themeColor, size: 20),
+          Icon(icon, color: _themeColor, size: 18),
           const SizedBox(height: 2),
           Text(label, style: const TextStyle(fontSize: 8, color: Colors.white70)),
         ],
@@ -695,70 +652,72 @@ class _FooterInfo extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(title, style: const TextStyle(fontSize: 8, color: Colors.white38, letterSpacing: 1.0)),
-        const SizedBox(height: 1),
-        Text(val, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)),
+        Text(title, style: const TextStyle(fontSize: 7, color: Colors.white38, letterSpacing: 0.8)),
+        Text(val, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white)),
       ],
     );
   }
 }
 
-// رسم کلاستر مدرن دیجیتال کیلومترشمار
-class CyberClusterGaugePainter extends CustomPainter {
+// رسم کلاستر ضد کرش و سازگار با زاویه صفر
+class SafeCyberClusterPainter extends CustomPainter {
   final double speed;
   final double maxSpeed;
   final Color themeColor;
-  final double glowMultiplier;
 
-  CyberClusterGaugePainter({
+  SafeCyberClusterPainter({
     required this.speed,
     required this.maxSpeed,
     required this.themeColor,
-    required this.glowMultiplier,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2 - 14;
+    final radius = size.width / 2 - 12;
 
     const startAngle = 2.3;
     const totalSweep = 4.8;
 
+    // رینگ پس‌زمینه
     final bgPaint = Paint()
-      ..color = Colors.white.withOpacity(0.06)
+      ..color = Colors.white.withOpacity(0.08)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 10
+      ..strokeWidth = 8
       ..strokeCap = StrokeCap.round;
 
-    canvas.drawArc(Rect.fromCircle(center: center, radius: radius), startAngle, totalSweep, false, bgPaint);
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      startAngle,
+      totalSweep,
+      false,
+      bgPaint,
+    );
 
+    // محاسبه پیشرفت با شرط ایمن بودن زاویه
     final progress = (speed / maxSpeed).clamp(0.0, 1.0);
     final currentSweep = totalSweep * progress;
 
-    if (currentSweep > 0) {
-      final glowPaint = Paint()
-        ..color = themeColor.withOpacity(0.5 * glowMultiplier)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 16
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 12 * glowMultiplier)
-        ..strokeCap = StrokeCap.round;
-
-      canvas.drawArc(Rect.fromCircle(center: center, radius: radius), startAngle, currentSweep, false, glowPaint);
-
+    if (currentSweep > 0.01) {
       final activePaint = Paint()
         ..color = themeColor
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 8
+        ..strokeWidth = 7
         ..strokeCap = StrokeCap.round;
 
-      canvas.drawArc(Rect.fromCircle(center: center, radius: radius), startAngle, currentSweep, false, activePaint);
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        startAngle,
+        currentSweep,
+        false,
+        activePaint,
+      );
     }
   }
 
   @override
-  bool shouldRepaint(covariant CyberClusterGaugePainter oldDelegate) {
-    return oldDelegate.speed != speed || oldDelegate.themeColor != themeColor || oldDelegate.glowMultiplier != glowMultiplier;
+  bool shouldRepaint(covariant SafeCyberClusterPainter oldDelegate) {
+    return oldDelegate.speed != speed || oldDelegate.themeColor != themeColor;
   }
 }
 
@@ -770,14 +729,12 @@ class RadarMapPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final gridPaint = Paint()
-      ..color = themeColor.withOpacity(0.08)
+      ..color = themeColor.withOpacity(0.07)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0;
 
-    canvas.drawCircle(center, 45, gridPaint);
-    canvas.drawCircle(center, 90, gridPaint);
-    canvas.drawCircle(center, 135, gridPaint);
-
+    canvas.drawCircle(center, 40, gridPaint);
+    canvas.drawCircle(center, 80, gridPaint);
     canvas.drawLine(Offset(0, center.dy), Offset(size.width, center.dy), gridPaint);
     canvas.drawLine(Offset(center.dx, 0), Offset(center.dx, size.height), gridPaint);
   }
