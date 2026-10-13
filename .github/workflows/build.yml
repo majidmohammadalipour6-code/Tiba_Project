@@ -27,6 +27,20 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Create Standard Flutter Project Structure
+        run: |
+          # پشتیبان‌گیری از کدهای نوشته شده خودت
+          mkdir -p temp_lib temp_android
+          if [ -d "lib" ]; then cp -r lib/* temp_lib/; fi
+          if [ -f "pubspec.yaml" ]; then cp pubspec.yaml temp_pubspec.yaml; fi
+          
+          # ساخت یک پروژه فلاتر استاندارد تازه در یک پوشه موقت
+          flutter create . --org com.tiba.project --project-name tiba_project --platforms android
+          
+          # بازگرداندن کدهای خودت به پروژه استاندارد شده
+          if [ -d "temp_lib" ] && [ "$(ls -A temp_lib)" ]; then rm -rf lib/* && cp -r temp_lib/* lib/; fi
+          if [ -f "temp_pubspec.yaml" ]; then cp temp_pubspec.yaml pubspec.yaml; fi
+
       - name: Install Dependencies
         run: flutter pub get
 
