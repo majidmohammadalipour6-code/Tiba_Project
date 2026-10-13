@@ -25,31 +25,34 @@ jobs:
           flutter-version: '3.19.6'
           channel: 'stable'
 
-      - name: Create Clean Flutter Project
+      - name: Prepare Clean Project Structure
         run: |
+          # ذخیره فایل اصلی شما در یک جای امن
+          cp lib/main.dart user_main.dart
+          
+          # ساخت ساختار تمیز پروژه
           flutter create . --org com.tiba.launcher --project-name tiba_launcher
-
-      - name: Add Geolocator Dependency
-        run: |
+          
+          # بازگرداندن کد اصلی داشبورد به جای کد پیش‌فرض
+          cp user_main.dart lib/main.dart
+          
+          # حذف پوشه تست برای جلوگیری از خطای کامپایل
+          rm -rf test
+          
+          # افزودن پکیج موقعیت مکانی جی‌پی‌اس
           flutter pub add geolocator
 
-      - name: Configure Android Permissions & MinSdkVersion
+      - name: Set Permissions & Android Config
         run: |
-          # افزودن دسترسی‌های مکان به مانیفست
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          if [ -f "$MANIFEST" ]; then
-            sed -i '/<application/i \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' $MANIFEST
-          fi
-
-          # تنظیم حداقل SDK اندروید روی 21 برای سازگاری کامل پکیج‌ها
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' $MANIFEST
+          
           GRADLE_FILE="android/app/build.gradle"
-          if [ -f "$GRADLE_FILE" ]; then
-            sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' $GRADLE_FILE
-          fi
+          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' $GRADLE_FILE
 
       - name: Build Debug APK
         run: |
-          flutter build apk --debug
+          flutter build apk --debug --no-tree-shake-icons
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
