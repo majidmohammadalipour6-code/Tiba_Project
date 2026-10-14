@@ -427,7 +427,6 @@ class _DashboardState extends State<Dashboard> {
           padding: const EdgeInsets.all(12),
           child: Column(
             children: [
-              // نوار بالایی: دکمه تنظیمات، دکمه نرم‌افزارها و ساعت دیجیتال نئونی
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -467,11 +466,9 @@ class _DashboardState extends State<Dashboard> {
                 ],
               ),
               const SizedBox(height: 8),
-              // بدنه اصلی سه ستونه خودرویی
               Expanded(
                 child: Row(
                   children: [
-                    // ستون اول: مسیریابی و موزیک
                     Expanded(
                       flex: 4,
                       child: Column(
@@ -554,7 +551,6 @@ class _DashboardState extends State<Dashboard> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    // ستون دوم: سرعت‌سنج دیجیتال نئونی دایره‌ای
                     Expanded(
                       flex: 4,
                       child: Center(
@@ -575,7 +571,6 @@ class _DashboardState extends State<Dashboard> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    // ستون سوم: لوگو و معرفی خودرو تیبا ۲
                     Expanded(
                       flex: 3,
                       child: _card(
@@ -619,13 +614,7 @@ class _DashboardState extends State<Dashboard> {
         color: Colors.white.withOpacity(0.04),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: c.withOpacity(0.3), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: c.withOpacity(0.04),
-            blurRadius: 8,
-            spreadRadius: 1,
-          )
-        ],
+        boxShadow: [BoxShadow(color: c.withOpacity(0.04), blurRadius: 8, spreadRadius: 1)],
       ),
       child: child,
     );
