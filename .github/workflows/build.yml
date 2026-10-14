@@ -25,26 +25,27 @@ jobs:
           flutter-version: '3.24.3'
           channel: 'stable'
 
-      - name: Clean Old Android Folder and Lock File
+      - name: Recreate Android Project
         run: |
-          rm -rf android pubspec.lock
-          echo "Cleaned old android/ and pubspec.lock"
-
-      - name: Create Fresh Android Platform
-        run: |
+          rm -rf android
           flutter create . --platforms=android --org com.tiba.launcher --project-name tiba_project
-          flutter doctor -v
 
       - name: Inject Custom MainActivity for App Drawer
         run: |
           python3 - <<'EOF'
           import os
 
-          main_activity_path = 'android/app/src/main/kotlin/com/tiba/launcher/tiba_project/MainActivity.kt'
-          # مسیر پیش‌فرض flutter create
-          alt_path = 'android/app/src/main/kotlin/com/tiba/launcher/MainActivity.kt'
-          target = main_activity_path if os.path.isdir(os.path.dirname(main_activity_path)) else alt_path
-          os.makedirs(os.path.dirname(target), exist_ok=True)
+          # جستجو برای پیدا کردن مسیر پکیج کاتلین ساخته شده
+          base_dir = 'android/app/src/main/kotlin'
+          target_file = None
+          for root, dirs, files in os.walk(base_dir):
+              if 'MainActivity.kt' in files:
+                  target_file = os.path.join(root, 'MainActivity.kt')
+                  break
+
+          if not target_file:
+              target_file = 'android/app/src/main/kotlin/com/tiba/launcher/MainActivity.kt'
+              os.makedirs(os.path.dirname(target_file), exist_ok=True)
 
           kotlin_code = '''package com.tiba.launcher
 
@@ -89,34 +90,54 @@ jobs:
               }
           }
           '''
-          with open(target, 'w', encoding='utf-8') as f:
+          with open(target_file, 'w', encoding='utf-8') as f:
               f.write(kotlin_code)
-          print("MainActivity.kt injected at:", target)
+          print(f"Injected MainActivity at: {target_file}")
           EOF
 
-      - name: Force SDK 35 in Gradle Files
+      - name: Patch Root and Plugin Gradle for Geolocator & SDK 35
         run: |
           python3 - <<'EOF'
-          import re, os
+          import os
 
-          # فایل گرید اپلیکیشن
-          p = 'android/app/build.gradle'
-          c = open(p, encoding='utf-8').read()
-          c = re.sub(r'compileSdk\s*=\s*[^ \n]+', 'compileSdk = 35', c)
-          c = re.sub(r'compileSdkVersion\s+[^ \n]+', 'compileSdkVersion 35', c)
-          c = re.sub(r'targetSdk\s*=\s*[^ \n]+', 'targetSdk = 35', c)
-          c = re.sub(r'targetSdkVersion\s+[^ \n]+', 'targetSdkVersion 35', c)
-          c = re.sub(r'minSdk\s*=\s*[^ \n]+', 'minSdk = 21', c)
-          c = re.sub(r'minSdkVersion\s+[^ \n]+', 'minSdkVersion 21', c)
-          open(p, 'w', encoding='utf-8').write(c)
+          # ۱. اصلاح فایل android/build.gradle (ریشه پروژه)
+          root_gradle = 'android/build.gradle'
+          patch_block = """
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
 
-          # gradle.properties برای سازگاری Kotlin 2.1
-          gp = 'android/gradle.properties'
-          g = open(gp, encoding='utf-8').read()
-          if 'flutter.minSdkVersion' not in g:
-              g += "\nflutter.minSdkVersion=21\nflutter.targetSdkVersion=35\nflutter.compileSdkVersion=35\n"
-              open(gp, 'w', encoding='utf-8').write(g)
-          print("Gradle SDK settings forced to 35.")
+          subprojects {
+              afterEvaluate { project ->
+                  if (project.hasProperty("android")) {
+                      project.android {
+                          compileSdkVersion 35
+                          buildToolsVersion "35.0.0"
+                          defaultConfig {
+                              minSdkVersion 21
+                              targetSdkVersion 35
+                          }
+                      }
+                  }
+              }
+          }
+          """
+          with open(root_gradle, 'a', encoding='utf-8') as f:
+              f.write(patch_block)
+
+          # ۲. تنظیم compileSdk در android/app/build.gradle
+          app_gradle = 'android/app/build.gradle'
+          if os.path.exists(app_gradle):
+              txt = open(app_gradle, encoding='utf-8').read()
+              txt = txt.replace('compileSdk = flutter.compileSdkVersion', 'compileSdk = 35')
+              txt = txt.replace('targetSdk = flutter.targetSdkVersion', 'targetSdk = 35')
+              txt = txt.replace('minSdk = flutter.minSdkVersion', 'minSdk = 21')
+              open(app_gradle, 'w', encoding='utf-8').write(txt)
+
+          print("Successfully patched root and app gradle.")
           EOF
 
       - name: Fetch Dependencies
