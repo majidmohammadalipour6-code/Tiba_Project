@@ -1,16 +1,16 @@
 name: tiba_project
-description: A futuristic Tiba 2 car infotainment launcher.
-publish_to: 'none'
+description: "Tiba 2 Cyber HUD Launcher for Android Monitor"
+publish_to: "none"
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: "^3.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
   geolocator: ^10.1.0
-  url_launcher: ^6.2.2
+  url_launcher: ^6.2.5
 
 dev_dependencies:
   flutter_test:
@@ -19,3 +19,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  assets:
+    - assets/tiba2.png
