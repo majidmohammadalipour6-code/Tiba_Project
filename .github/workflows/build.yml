@@ -49,7 +49,6 @@ jobs:
               if 'org.jetbrains.kotlin.android' in content:
                   content = re.sub(r'id\s+["\']org\.jetbrains\.kotlin\.android["\']\s+version\s+["\'][^"\']+["\']', 'id "org.jetbrains.kotlin.android" version "2.1.0"', content)
               else:
-                  # اضافه کردن به بلوک plugins
                   if 'plugins {' in content:
                       content = content.replace('plugins {', 'plugins {\n    id "org.jetbrains.kotlin.android" version "2.1.0" apply false')
               open(settings_gradle, 'w', encoding='utf-8').write(content)
@@ -122,6 +121,35 @@ jobs:
       - name: Fetch Dependencies
         run: |
           flutter pub get
+
+      - name: Fix All Broken Plugins In Pub Cache
+        run: |
+          python3 - <<'EOF'
+          import os, re
+
+          cache_dir = os.path.expanduser('~/.pub-cache')
+          for root, dirs, files in os.walk(cache_dir):
+              for file in files:
+                  if file == 'build.gradle':
+                      path = os.path.join(root, file)
+                      try:
+                          with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+                              content = f.read()
+
+                          # جایگزینی ارجاعات معیوب به شیء flutter در تمام پلاگین‌ها
+                          fixed = content
+                          fixed = re.sub(r'compileSdkVersion\s+(?:project\.android\.flutter\.|flutter\.)compileSdkVersion', 'compileSdkVersion 35', fixed)
+                          fixed = re.sub(r'compileSdk\s+(?:project\.android\.flutter\.|flutter\.)compileSdkVersion', 'compileSdk 35', fixed)
+                          fixed = re.sub(r'targetSdkVersion\s+(?:project\.android\.flutter\.|flutter\.)targetSdkVersion', 'targetSdkVersion 35', fixed)
+                          fixed = re.sub(r'minSdkVersion\s+(?:project\.android\.flutter\.|flutter\.)minSdkVersion', 'minSdkVersion 21', fixed)
+
+                          if fixed != content:
+                              with open(path, 'w', encoding='utf-8') as f:
+                                  f.write(fixed)
+                              print(f"Patched: {path}")
+                      except Exception as e:
+                          pass
+          EOF
 
       - name: Overwrite Broken Geolocator Gradle
         run: |
