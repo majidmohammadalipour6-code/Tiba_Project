@@ -31,13 +31,40 @@ jobs:
             flutter create . --platforms=android --org com.tiba.launcher --project-name tiba_project
           fi
 
+      - name: Show current Gradle config (diagnostic)
+        run: |
+          echo "=== android/build.gradle ==="
+          cat android/build.gradle || true
+          echo "=== android/settings.gradle ==="
+          cat android/settings.gradle || true
+
       - name: Update Kotlin Gradle plugin version
         run: |
-          FILE=android/build.gradle
-          if [ -f "$FILE" ]; then
-            sed -i.bak "s/ext.kotlin_version *= *'[^']*'/ext.kotlin_version = '1.9.23'/" "$FILE"
-            grep kotlin_version "$FILE"
+          KOTLIN_VERSION="1.9.23"
+
+          # Case 1: old-style ext.kotlin_version exists -> update it
+          if grep -q "ext.kotlin_version" android/build.gradle 2>/dev/null; then
+            sed -i.bak "s/ext.kotlin_version *= *'[^']*'/ext.kotlin_version = '$KOTLIN_VERSION'/" android/build.gradle
+            echo "Updated ext.kotlin_version in android/build.gradle"
+
+          # Case 2: plugins DSL in build.gradle -> update kotlin version there
+          elif grep -q "org.jetbrains.kotlin" android/build.gradle 2>/dev/null; then
+            sed -i.bak "s/id \"org.jetbrains.kotlin.android\" version \"[^\"]*\"/id \"org.jetbrains.kotlin.android\" version \"$KOTLIN_VERSION\"/; s/id 'org.jetbrains.kotlin.android' version '[^']*'/id 'org.jetbrains.kotlin.android' version '$KOTLIN_VERSION'/" android/build.gradle
+            echo "Updated kotlin plugin in android/build.gradle"
+
+          # Case 3: plugins DSL in settings.gradle -> update there
+          elif grep -q "org.jetbrains.kotlin" android/settings.gradle 2>/dev/null; then
+            sed -i.bak "s/id \"org.jetbrains.kotlin.android\" version \"[^\"]*\"/id \"org.jetbrains.kotlin.android\" version \"$KOTLIN_VERSION\"/; s/id 'org.jetbrains.kotlin.android' version '[^']*'/id 'org.jetbrains.kotlin.android' version '$KOTLIN_VERSION'/; s/org.jetbrains.kotlin:android [0-9.]*/org.jetbrains.kotlin:android $KOTLIN_VERSION/" android/settings.gradle
+            echo "Updated kotlin plugin in android/settings.gradle"
+
+          # Case 4: no kotlin declaration found -> add ext line to build.gradle
+          else
+            sed -i.bak "1i ext.kotlin_version = '$KOTLIN_VERSION'\n" android/build.gradle
+            echo "Added ext.kotlin_version to android/build.gradle"
           fi
+
+          echo "--- Result ---"
+          grep -n "kotlin" android/build.gradle android/settings.gradle || true
 
       - name: Fix asset paths in pubspec.yaml (find missing files and remap)
         run: |
