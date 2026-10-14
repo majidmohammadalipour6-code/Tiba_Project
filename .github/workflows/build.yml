@@ -19,10 +19,10 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Set up Flutter
+      - name: Set up Flutter (Updated for modern SDK compatibility)
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.6'
+          flutter-version: '3.24.3'
           channel: 'stable'
 
       - name: Check & Fix Android Structure
@@ -48,7 +48,6 @@ jobs:
           path = 'android/app/src/main/AndroidManifest.xml'
           s = open(path, encoding='utf-8').read()
 
-          # --- permissions ---
           perms = '''    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
               <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
               <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -61,7 +60,6 @@ jobs:
               idx = s.index('>') + 1
               s = s[:idx] + '\n' + perms + s[idx:]
 
-          # --- launcher (HOME) categories ---
           if 'category.HOME' not in s:
               s = s.replace(
                   '<category android:name="android.intent.category.LAUNCHER" />',
@@ -70,11 +68,9 @@ jobs:
                   '                <category android:name="android.intent.category.DEFAULT" />'
               )
 
-          # --- singleTask launch mode ---
           if 'launchMode' not in s:
               s = s.replace('<activity', '<activity\n                android:launchMode="singleTask"', 1)
 
-          # --- audio service + receiver before </application> ---
           svc = '''
                   <service
                       android:name="com.ryanheise.audioservice.AudioService"
