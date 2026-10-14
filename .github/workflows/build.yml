@@ -1,4 +1,3 @@
-اینم build
 name: Build Tiba Launcher
 
 on:
@@ -26,17 +25,36 @@ jobs:
           flutter-version: '3.24.3'
           channel: 'stable'
 
-      - name: Check & Fix Android Structure
+      - name: Fix Root build.gradle (Remove afterEvaluate)
         run: |
-          if [ ! -d "android" ]; then
-            flutter create . --platforms=android --org com.tiba.launcher --project-name tiba_project
-          fi
+          python3 - <<'EOF'
+          import os
 
-      - name: Ensure Assets Exist
-        run: |
-          if [ ! -f "tiba2.png" ]; then
-            python3 -c "import base64; open('tiba2.png','wb').write(base64.b64decode('*******'))"
-          fi
+          # تمیز کردن کامل android/build.gradle
+          path = 'android/build.gradle'
+          if os.path.exists(path):
+              clean_build_gradle = """allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.buildDir = '../build'
+          subprojects {
+              project.buildDir = "${rootProject.buildDir}/${project.name}"
+          }
+          subprojects {
+              project.evaluationDependsOn(':app')
+          }
+
+          tasks.register("clean", Delete) {
+              delete rootProject.buildDir
+          }
+          """
+              with open(path, 'w', encoding='utf-8') as f:
+                  f.write(clean_build_gradle)
+          EOF
 
       - name: Force Modern Kotlin Version
         run: |
@@ -52,22 +70,12 @@ jobs:
                   if 'plugins {' in content:
                       content = content.replace('plugins {', 'plugins {\n    id "org.jetbrains.kotlin.android" version "2.1.0" apply false')
               open(settings_gradle, 'w', encoding='utf-8').write(content)
-
-          build_gradle = 'android/build.gradle'
-          if os.path.exists(build_gradle):
-              content = open(build_gradle, encoding='utf-8').read()
-              if 'ext.kotlin_version' in content:
-                  content = re.sub(r'ext\.kotlin_version\s*=\s*[\'"][^\'"]+[\'"]', "ext.kotlin_version = '2.1.0'", content)
-              else:
-                  content = "buildscript {\n    ext.kotlin_version = '2.1.0'\n}\n" + content
-              open(build_gradle, 'w', encoding='utf-8').write(content)
           EOF
 
       - name: Patch AndroidManifest
         run: |
           python3 - <<'EOF'
           import os
-
           path = 'android/app/src/main/AndroidManifest.xml'
           if os.path.exists(path):
               s = open(path, encoding='utf-8').read()
@@ -93,7 +101,7 @@ jobs:
 
               if 'launchMode' not in s:
                   s = s.replace('<activity', '<activity\n                android:launchMode="singleTask"', 1)
-              
+
               open(path, 'w', encoding='utf-8').write(s)
           EOF
 
@@ -106,45 +114,6 @@ jobs:
       - name: Fetch Dependencies
         run: |
           flutter pub get
-
-      - name: Bruteforce Patch All Cached Plugins
-        run: |
-          python3 - <<'EOF'
-          import os
-
-          cache_dir = os.path.expanduser('~/.pub-cache')
-          for root, dirs, files in os.walk(cache_dir):
-              for file in files:
-                  if file.endswith('build.gradle'):
-                      filepath = os.path.join(root, file)
-                      try:
-                          with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
-                              lines = f.readlines()
-                          
-                          changed = False
-                          new_lines = []
-                          for line in lines:
-                              if 'compileSdkVersion' in line and ('flutter' in line or 'project.' in line):
-                                  new_lines.append('    compileSdkVersion 35\n')
-                                  changed = True
-                              elif 'compileSdk ' in line and ('flutter' in line or 'project.' in line):
-                                  new_lines.append('    compileSdk = 35\n')
-                                  changed = True
-                              elif 'minSdkVersion' in line and ('flutter' in line or 'project.' in line):
-                                  new_lines.append('    minSdkVersion 21\n')
-                                  changed = True
-                              elif 'targetSdkVersion' in line and ('flutter' in line or 'project.' in line):
-                                  new_lines.append('    targetSdkVersion 35\n')
-                                  changed = True
-                              else:
-                                  new_lines.append(line)
-                          
-                          if changed:
-                              with open(filepath, 'w', encoding='utf-8') as f:
-                                  f.writelines(new_lines)
-                      except Exception:
-                          pass
-          EOF
 
       - name: Overwrite Known Fragile Plugins
         run: |
@@ -173,6 +142,28 @@ jobs:
           }
           GRADLE_EOF
           done
+
+      - name: Patch Cached Plugins SDK
+        run: |
+          python3 - <<'EOF'
+          import os
+          cache_dir = os.path.expanduser('~/.pub-cache')
+          for root, dirs, files in os.walk(cache_dir):
+              for file in files:
+                  if file.endswith('build.gradle'):
+                      filepath = os.path.join(root, file)
+                      try:
+                          with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                              c = f.read()
+                          if 'compileSdkVersion flutter.compileSdkVersion' in c or 'compileSdkVersion 34' in c or 'compileSdkVersion 33' in c:
+                              c = c.replace('compileSdkVersion flutter.compileSdkVersion', 'compileSdkVersion 35')
+                              c = c.replace('compileSdkVersion 34', 'compileSdkVersion 35')
+                              c = c.replace('compileSdkVersion 33', 'compileSdkVersion 35')
+                              with open(filepath, 'w', encoding='utf-8') as f:
+                                  f.write(c)
+                      except:
+                          pass
+          EOF
 
       - name: Build Launcher APK
         run: |
