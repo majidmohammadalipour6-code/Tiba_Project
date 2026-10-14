@@ -25,6 +25,10 @@ jobs:
           flutter-version: '3.19.6'
           channel: 'stable'
 
+      - name: Create Android Structure if missing
+        run: |
+          flutter create . --platforms=android --org com.tiba.launcher
+
       - name: Get dependencies
         run: flutter pub get
 
