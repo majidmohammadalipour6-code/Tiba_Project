@@ -1,12 +1,17 @@
-name: Build APK
+name: Build Tiba Project APK
 
-on: [push]
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -18,15 +23,37 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.19.6'
+          channel: 'stable'
+          cache: true
 
-      - name: Install dependencies
+      - name: Recreate Standard Android Project
+        run: |
+          mkdir -p /tmp/backup
+          if [ -d "lib" ]; then cp -r lib /tmp/backup/; fi
+          if [ -f "pubspec.yaml" ]; then cp pubspec.yaml /tmp/backup/; fi
+
+          # پاکسازی فایل‌های قدیمی به جز ورک‌فلو
+          find . -maxdepth 1 ! -name '.github' ! -name '.' -exec rm -rf {} +
+
+          # ساخت پروژه استاندارد فلاتر
+          flutter create . --org com.tiba.project --project-name tiba_project --platforms android
+
+          # بازگرداندن کدهای اصلی شما
+          if [ -d "/tmp/backup/lib" ]; then cp -r /tmp/backup/lib/* lib/; fi
+          if [ -f "/tmp/backup/pubspec.yaml" ]; then cp /tmp/backup/pubspec.yaml pubspec.yaml; fi
+
+          # تنظیم رسمی و قطعی نسخه کاتلین در build.gradle
+          sed -i 's/ext.kotlin_version = .*/ext.kotlin_version = "1.9.20"/' android/build.gradle || true
+          sed -i 's/kotlin-android" version "[^"]*"/kotlin-android" version "1.9.20"/' android/settings.gradle || true
+
+      - name: Install Dependencies
         run: flutter pub get
 
-      - name: Build APK
-        run: flutter build apk --debug
+      - name: Build Debug APK
+        run: flutter build apk --debug --no-tree-shake-icons
 
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
+          name: Tiba-Dashboard-APK
           path: build/app/outputs/flutter-apk/app-debug.apk
