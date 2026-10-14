@@ -87,43 +87,46 @@ jobs:
 
       - name: Fetch Dependencies
         run: |
+          flutter pub upgrade geolocator
           flutter pub get
 
-      - name: Patch Cached Geolocator Plugin directly
+      - name: Force Patch All Android Plugins build.gradle
         run: |
           python3 - <<'EOF'
           import glob
-          import os
+          import re
 
-          # جستجو در تمام فایل‌های پکیج کش‌شده geolocator_android
-          pattern = os.path.expanduser('~/.pub-cache/hosted/pub.dev/geolocator_android-*/android/build.gradle')
+          # تمام پلاگین‌های اندرویدی دانلود شده در کش پاپ را بررسی و خطوط نامعتبر را پاکسازی می‌کنیم
+          pattern = '/home/runner/.pub-cache/hosted/pub.dev/*/android/build.gradle'
           files = glob.glob(pattern)
 
           for fpath in files:
-              print(f"Patching: {fpath}")
               with open(fpath, 'r', encoding='utf-8') as f:
                   content = f.read()
 
-              # جایگزین کردن هر خطی که به android.flutter وابسته است با مقادیر صریح و پایدار
-              content = content.replace("compileSdkVersion project.android.flutter.compileSdkVersion", "compileSdkVersion 34")
-              content = content.replace("compileSdkVersion flutter.compileSdkVersion", "compileSdkVersion 34")
-              content = content.replace("targetSdkVersion flutter.targetSdkVersion", "targetSdkVersion 34")
-              content = content.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 21")
+              modified = False
+              # اصلاح صریح هرگونه فراخوانی فلاتر در گریدل پلاگین‌ها
+              if 'flutter.compileSdkVersion' in content or 'android.flutter' in content:
+                  content = re.sub(r'compileSdkVersion\s+.*flutter.*', 'compileSdkVersion 35', content)
+                  content = re.sub(r'targetSdkVersion\s+.*flutter.*', 'targetSdkVersion 35', content)
+                  content = re.sub(r'minSdkVersion\s+.*flutter.*', 'minSdkVersion 21', content)
+                  modified = True
 
-              with open(fpath, 'w', encoding='utf-8') as f:
-                  f.write(content)
-          print("Geolocator patch successfully applied!")
+              if modified:
+                  print(f"Patched legacy plugin: {fpath}")
+                  with open(fpath, 'w', encoding='utf-8') as f:
+                      f.write(content)
           EOF
 
       - name: Set SDK Versions
         run: |
           echo "flutter.minSdkVersion=21" >> android/local.properties
-          echo "flutter.targetSdkVersion=34" >> android/local.properties
-          echo "flutter.compileSdkVersion=34" >> android/local.properties
+          echo "flutter.targetSdkVersion=35" >> android/local.properties
+          echo "flutter.compileSdkVersion=35" >> android/local.properties
 
       - name: Build Launcher APK
         run: |
-          flutter build apk --release
+          flutter build apk --release --no-pub
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
