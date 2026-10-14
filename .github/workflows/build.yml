@@ -138,4 +138,4 @@ jobs:
                   )
                   with open(path, 'wb') as f:
                       f.write(png)
-                  print(f"Created placeholder asset: {path}")
+                   print(f"Created placeholder asset: {path}")
