@@ -37,30 +37,6 @@ jobs:
             python3 -c "import base64; open('tiba2.png','wb').write(base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='))"
           fi
 
-      - name: Patch Gradle for Flutter Properties
-        run: |
-          python3 - <<'EOF'
-          # رفع قطعی مشکل missing flutter extension برای تمام ساب‌پروژه‌ها
-          path = 'android/build.gradle'
-          with open(path, 'r', encoding='utf-8') as f:
-              content = f.read()
-
-          # اگر کدهای بعد از ارزیابی قبلی مانده باشد پاکسازی می‌کنیم
-          if "Cannot run Project.afterEvaluate" in content or "afterEvaluate" in content:
-              content = content.split("allprojects {")[0]
-
-          injection = """
-          subprojects {
-              project.evaluationDependsOn(':app')
-          }
-          """
-          if 'evaluationDependsOn' not in content:
-              content += "\n" + injection
-
-          with open(path, 'w', encoding='utf-8') as f:
-              f.write(content)
-          EOF
-
       - name: Patch AndroidManifest
         run: |
           python3 - <<'EOF'
@@ -109,6 +85,36 @@ jobs:
           open(path, 'w', encoding='utf-8').write(s)
           EOF
 
+      - name: Fetch Dependencies
+        run: |
+          flutter pub get
+
+      - name: Patch Cached Geolocator Plugin directly
+        run: |
+          python3 - <<'EOF'
+          import glob
+          import os
+
+          # جستجو در تمام فایل‌های پکیج کش‌شده geolocator_android
+          pattern = os.path.expanduser('~/.pub-cache/hosted/pub.dev/geolocator_android-*/android/build.gradle')
+          files = glob.glob(pattern)
+
+          for fpath in files:
+              print(f"Patching: {fpath}")
+              with open(fpath, 'r', encoding='utf-8') as f:
+                  content = f.read()
+
+              # جایگزین کردن هر خطی که به android.flutter وابسته است با مقادیر صریح و پایدار
+              content = content.replace("compileSdkVersion project.android.flutter.compileSdkVersion", "compileSdkVersion 34")
+              content = content.replace("compileSdkVersion flutter.compileSdkVersion", "compileSdkVersion 34")
+              content = content.replace("targetSdkVersion flutter.targetSdkVersion", "targetSdkVersion 34")
+              content = content.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 21")
+
+              with open(fpath, 'w', encoding='utf-8') as f:
+                  f.write(content)
+          print("Geolocator patch successfully applied!")
+          EOF
+
       - name: Set SDK Versions
         run: |
           echo "flutter.minSdkVersion=21" >> android/local.properties
@@ -117,8 +123,6 @@ jobs:
 
       - name: Build Launcher APK
         run: |
-          flutter pub upgrade geolocator
-          flutter pub get
           flutter build apk --release
 
       - name: Upload APK
