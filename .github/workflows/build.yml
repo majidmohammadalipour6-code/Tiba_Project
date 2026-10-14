@@ -65,6 +65,8 @@ jobs:
       - name: Patch AndroidManifest
         run: |
           python3 - <<'EOF'
+          import os
+
           path = 'android/app/src/main/AndroidManifest.xml'
           if os.path.exists(path):
               s = open(path, encoding='utf-8').read()
