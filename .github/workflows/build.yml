@@ -31,6 +31,14 @@ jobs:
             flutter create . --platforms=android --org com.tiba.launcher --project-name tiba_project
           fi
 
+      - name: Update Kotlin Gradle plugin version
+        run: |
+          FILE=android/build.gradle
+          if [ -f "$FILE" ]; then
+            sed -i.bak "s/ext.kotlin_version *= *'[^']*'/ext.kotlin_version = '1.9.23'/" "$FILE"
+            grep kotlin_version "$FILE"
+          fi
+
       - name: Fix asset paths in pubspec.yaml (find missing files and remap)
         run: |
           python3 - <<'EOF'
@@ -40,7 +48,6 @@ jobs:
           pubspec = open(pubspec_path, encoding='utf-8').read()
 
           def resolve(path):
-              """Find the declared asset, searching the whole repo if needed."""
               if os.path.isfile(path):
                   return path
               base = os.path.basename(path)
@@ -106,7 +113,7 @@ jobs:
         run: flutter pub get
 
       - name: Build APK
-        run: flutter build apk --split-per-abi --verbose
+        run: flutter build apk --split-per-abi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
