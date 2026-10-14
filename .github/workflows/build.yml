@@ -122,45 +122,12 @@ jobs:
         run: |
           flutter pub get
 
-      - name: Patch All Fragile Cached Plugins
+      - name: Analyze Dart Code (Show Exact Code Errors)
         run: |
-          python3 - <<'EOF'
-          import os, re
+          flutter analyze --no-fatal-warnings || true
 
-          cache_dir = os.path.expanduser('~/.pub-cache')
-
-          for root, dirs, files in os.walk(cache_dir):
-              for file in files:
-                  if file.endswith('build.gradle'):
-                      filepath = os.path.join(root, file)
-                      try:
-                          with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
-                              c = f.read()
-
-                          original = c
-                          # حذف رفرنس‌های خراب به آبجکت flutter در اکستنشن android
-                          c = re.sub(r'compileSdkVersion\s+(flutter\.compileSdkVersion|[0-9]+)', 'compileSdkVersion 35', c)
-                          c = re.sub(r'targetSdkVersion\s+(flutter\.targetSdkVersion|[0-9]+)', 'targetSdkVersion 35', c)
-                          c = re.sub(r'minSdkVersion\s+(flutter\.minSdkVersion|[0-9]+)', 'minSdkVersion 21', c)
-
-                          # اگر خطای namespace یا compileSdkVersion به خاطر ساختار ناقص فلوتر بود
-                          if 'flutter.compileSdkVersion' in c:
-                              c = c.replace('flutter.compileSdkVersion', '35')
-                          if 'flutter.targetSdkVersion' in c:
-                              c = c.replace('flutter.targetSdkVersion', '35')
-                          if 'flutter.minSdkVersion' in c:
-                              c = c.replace('flutter.minSdkVersion', '21')
-
-                          if c != original:
-                              with open(filepath, 'w', encoding='utf-8') as f:
-                                  f.write(c)
-                      except Exception as e:
-                          pass
-          EOF
-
-      - name: Overwrite Geolocator and PackageInfo Specifically
+      - name: Overwrite Fragile Plugins
         run: |
-          # 1. تثبیت geolocator_android
           find /home/runner/.pub-cache -name "build.gradle" | grep "geolocator_android" | while read file; do
             cat << 'GRADLE_EOF' > "$file"
           group 'com.baseflow.geolocator'
@@ -187,7 +154,6 @@ jobs:
           GRADLE_EOF
           done
 
-          # 2. تثبیت مستقیم package_info_plus
           find /home/runner/.pub-cache -name "build.gradle" | grep "package_info_plus" | while read file; do
             cat << 'GRADLE_EOF' > "$file"
           group 'dev.fluttercommunity.plus.packageinfo'
@@ -207,7 +173,7 @@ jobs:
 
       - name: Build Launcher APK
         run: |
-          flutter build apk --release --no-pub
+          flutter build apk --release --verbose
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
