@@ -31,7 +31,7 @@ jobs:
             flutter create . --platforms=android --org com.tiba.launcher --project-name tiba_project
           fi
 
-      - name: Configure Root build.gradle with Universal Subproject Overrides
+      - name: Clean Root build.gradle
         run: |
           python3 - <<'EOF'
           import os
@@ -47,18 +47,6 @@ jobs:
           rootProject.buildDir = '../build'
           subprojects {
               project.buildDir = "${rootProject.buildDir}/${project.name}"
-              afterEvaluate { project ->
-                  if (project.hasProperty('android')) {
-                      project.android {
-                          compileSdkVersion 35
-                          buildToolsVersion '35.0.0'
-                          defaultConfig {
-                              minSdkVersion 21
-                              targetSdkVersion 35
-                          }
-                      }
-                  }
-              }
           }
           subprojects {
               project.evaluationDependsOn(':app')
@@ -133,25 +121,42 @@ jobs:
         run: |
           flutter pub get
 
-      - name: Neutralize Plugin Internal Listeners
+      - name: Fix and Patch All Pub Cache Plugins
         run: |
           python3 - <<'EOF'
-          import os, glob
+          import os, glob, re
 
           cache_dir = os.path.expanduser('~/.pub-cache/hosted/pub.dev')
-          for g_file in glob.glob(f'{cache_dir}/**/android/build.gradle', recursive=True):
+          gradle_files = glob.glob(f'{cache_dir}/**/android/build.gradle', recursive=True)
+
+          for g_file in gradle_files:
               try:
                   with open(g_file, 'r', encoding='utf-8') as f:
                       txt = f.read()
-                  
-                  # غیرفعال کردن لیسنرهای مشکل‌ساز substring و null check در پلاگین‌ها
-                  if 'afterEvaluate' in txt and ('geolocator' in g_file or 'wakelock' in g_file):
-                      txt = txt.replace('project.afterEvaluate', '// project.afterEvaluate')
+
+                  original = txt
+
+                  # حذف لیسنرهای ارزیابی که باعث کرش و substring روی null می‌شوند
+                  txt = re.sub(r'project\.afterEvaluate\s*\{[^}]*\}', '', txt, flags=re.DOTALL)
+
+                  # جایگزینی مستقیم هر نوع ارجاع به android.flutter یا flutter.*
+                  txt = re.sub(r'(?:android\.)?flutter\.compileSdkVersion', '35', txt)
+                  txt = re.sub(r'(?:android\.)?flutter\.minSdkVersion', '21', txt)
+                  txt = re.sub(r'(?:android\.)?flutter\.targetSdkVersion', '35', txt)
+                  txt = re.sub(r'flutter\[[\'"]compileSdkVersion[\'"]\]', '35', txt)
+                  txt = re.sub(r'flutter\[[\'"]minSdkVersion[\'"]\]', '21', txt)
+                  txt = re.sub(r'flutter\[[\'"]targetSdkVersion[\'"]\]', '35', txt)
+
+                  # اگر compileSdkVersion تعریف نشده باشد، تزریق مقدار صریح
+                  if 'compileSdkVersion' not in txt and 'android {' in txt:
+                      txt = txt.replace('android {', 'android {\n    compileSdkVersion 35\n', 1)
+
+                  if txt != original:
                       with open(g_file, 'w', encoding='utf-8') as f:
                           f.write(txt)
-                      print(f"Neutralized listener in: {g_file}")
+                      print(f"Successfully patched: {os.path.basename(os.path.dirname(os.path.dirname(g_file)))}")
               except Exception as e:
-                  pass
+                  print(f"Failed to patch {g_file}: {e}")
           EOF
 
       - name: Build Launcher APK
