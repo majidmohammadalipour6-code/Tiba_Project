@@ -95,41 +95,50 @@ jobs:
         run: |
           flutter pub get
 
-      - name: Auto-Patch All Cached Plugins Gradle Files
+      - name: Overwrite Broken Geolocator Gradle
         run: |
-          python3 - <<'EOF'
-          import os
-          import re
+          find /home/runner/.pub-cache -name "build.gradle" | grep "geolocator_android" | while read file; do
+            echo "Replacing $file"
+            cat << 'GRADLE_EOF' > "$file"
+          group 'com.baseflow.geolocator'
+          version '1.0-SNAPSHOT'
 
-          cache_dir = os.path.expanduser('~/.pub-cache')
-          count = 0
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.1.0'
+              }
+          }
 
-          for root, dirs, files in os.walk(cache_dir):
-              for file in files:
-                  if file == 'build.gradle':
-                      fpath = os.path.join(root, file)
-                      try:
-                          with open(fpath, 'r', encoding='utf-8', errors='ignore') as f:
-                              text = f.read()
+          apply plugin: 'com.android.library'
 
-                          # جایگزینی هرگونه استفاده از flutter.*SdkVersion با عدد مستقیم
-                          new_text = re.sub(r'compileSdkVersion\s+.*flutter.*', 'compileSdkVersion 35', text)
-                          new_text = re.sub(r'targetSdkVersion\s+.*flutter.*', 'targetSdkVersion 35', new_text)
-                          new_text = re.sub(r'minSdkVersion\s+.*flutter.*', 'minSdkVersion 21', new_text)
+          android {
+              namespace "com.baseflow.geolocator"
+              compileSdkVersion 35
 
-                          # اگر خطای flutter به صورت شیء مجزا وجود داشت
-                          new_text = re.sub(r'flutter\s*\{[^}]*\}', '', new_text)
+              defaultConfig {
+                  minSdkVersion 21
+                  testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+              }
 
-                          if new_text != text:
-                              with open(fpath, 'w', encoding='utf-8') as f:
-                                  f.write(new_text)
-                              count += 1
-                              print(f"Patched: {fpath}")
-                      except Exception as e:
-                          pass
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_1_8
+                  targetCompatibility JavaVersion.VERSION_1_8
+              }
+          }
 
-          print(f"Total plugin gradle files patched: {count}")
-          EOF
+          dependencies {
+              implementation 'com.google.android.gms:play-services-location:21.2.0'
+              implementation 'androidx.annotation:annotation:1.7.1'
+              implementation 'androidx.core:core:1.13.1'
+          }
+          GRADLE_EOF
+            echo "--- New content of $file: ---"
+            head -n 25 "$file"
+          done
 
       - name: Build Launcher APK
         run: |
