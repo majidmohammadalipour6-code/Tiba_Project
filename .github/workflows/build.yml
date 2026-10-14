@@ -66,48 +66,32 @@ jobs:
         run: |
           python3 - <<'EOF'
           path = 'android/app/src/main/AndroidManifest.xml'
-          s = open(path, encoding='utf-8').read()
-
-          perms = '''    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-              <uses-permission android:name="android.permission.WAKE_LOCK" />
-              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-          '''
-          if 'FOREGROUND_SERVICE_MEDIA_PLAYBACK' not in s:
-              idx = s.index('>') + 1
-              s = s[:idx] + '\n' + perms + s[idx:]
-
-          if 'category.HOME' not in s:
-              s = s.replace(
-                  '<category android:name="android.intent.category.LAUNCHER" />',
-                  '<category android:name="android.intent.category.LAUNCHER" />\n'
-                  '                <category android:name="android.intent.category.HOME" />\n'
-                  '                <category android:name="android.intent.category.DEFAULT" />'
-              )
-
-          if 'launchMode' not in s:
-              s = s.replace('<activity', '<activity\n                android:launchMode="singleTask"', 1)
-
-          svc = '''
-                  <service
-                      android:name="com.ryanheise.audioservice.AudioService"
-                      android:foregroundServiceType="mediaPlayback"
-                      android:exported="false" />
-                  <receiver
-                      android:name="com.ryanheise.audioservice.MediaButtonReceiver"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MEDIA_BUTTON" />
-                      </intent-filter>
-                  </receiver>
+          if os.path.exists(path):
+              s = open(path, encoding='utf-8').read()
+              perms = '''    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+                  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+                  <uses-permission android:name="android.permission.WAKE_LOCK" />
+                  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+                  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+                  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+                  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
               '''
-          if 'audioservice.AudioService' not in s:
-              s = s.replace('</application>', svc + '\n    </application>')
+              if 'FOREGROUND_SERVICE_MEDIA_PLAYBACK' not in s:
+                  idx = s.index('>') + 1
+                  s = s[:idx] + '\n' + perms + s[idx:]
 
-          open(path, 'w', encoding='utf-8').write(s)
+              if 'category.HOME' not in s:
+                  s = s.replace(
+                      '<category android:name="android.intent.category.LAUNCHER" />',
+                      '<category android:name="android.intent.category.LAUNCHER" />\n'
+                      '                <category android:name="android.intent.category.HOME" />\n'
+                      '                <category android:name="android.intent.category.DEFAULT" />'
+                  )
+
+              if 'launchMode' not in s:
+                  s = s.replace('<activity', '<activity\n                android:launchMode="singleTask"', 1)
+              
+              open(path, 'w', encoding='utf-8').write(s)
           EOF
 
       - name: Set SDK Properties
@@ -123,7 +107,7 @@ jobs:
       - name: Bruteforce Patch All Cached Plugins
         run: |
           python3 - <<'EOF'
-          import os, glob
+          import os
 
           cache_dir = os.path.expanduser('~/.pub-cache')
           for root, dirs, files in os.walk(cache_dir):
@@ -137,7 +121,6 @@ jobs:
                           changed = False
                           new_lines = []
                           for line in lines:
-                              # هر جا اشاره‌ای به متغیر flutter برای sdk شده با عدد ثابت جایگزین کن
                               if 'compileSdkVersion' in line and ('flutter' in line or 'project.' in line):
                                   new_lines.append('    compileSdkVersion 35\n')
                                   changed = True
@@ -156,14 +139,12 @@ jobs:
                           if changed:
                               with open(filepath, 'w', encoding='utf-8') as f:
                                   f.writelines(new_lines)
-                              print(f"Patched: {filepath}")
-                      except Exception as e:
+                      except Exception:
                           pass
           EOF
 
       - name: Overwrite Known Fragile Plugins
         run: |
-          # 1. Geolocator
           find /home/runner/.pub-cache -name "build.gradle" | grep "geolocator_android" | while read file; do
             cat << 'GRADLE_EOF' > "$file"
           group 'com.baseflow.geolocator'
@@ -176,9 +157,7 @@ jobs:
           android {
               namespace "com.baseflow.geolocator"
               compileSdkVersion 35
-              defaultConfig {
-                  minSdkVersion 21
-              }
+              defaultConfig { minSdkVersion 21 }
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_1_8
                   targetCompatibility JavaVersion.VERSION_1_8
@@ -186,34 +165,6 @@ jobs:
           }
           dependencies {
               implementation 'com.google.android.gms:play-services-location:21.2.0'
-              implementation 'androidx.annotation:annotation:1.7.1'
-              implementation 'androidx.core:core:1.13.1'
-          }
-          GRADLE_EOF
-          done
-
-          # 2. Package Info Plus
-          find /home/runner/.pub-cache -name "build.gradle" | grep "package_info_plus" | while read file; do
-            cat << 'GRADLE_EOF' > "$file"
-          group 'dev.fluttercommunity.plus.packageinfo'
-          version '1.0-SNAPSHOT'
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.1.0' }
-          }
-          apply plugin: 'com.android.library'
-          android {
-              namespace "dev.fluttercommunity.plus.packageinfo"
-              compileSdkVersion 35
-              defaultConfig {
-                  minSdkVersion 21
-              }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_1_8
-                  targetCompatibility JavaVersion.VERSION_1_8
-              }
-          }
-          dependencies {
               implementation 'androidx.annotation:annotation:1.7.1'
               implementation 'androidx.core:core:1.13.1'
           }
