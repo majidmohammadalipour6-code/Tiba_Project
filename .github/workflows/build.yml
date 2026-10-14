@@ -88,11 +88,12 @@ jobs:
           print("MainActivity.kt injected successfully.")
           EOF
 
-      - name: Force Modern Kotlin Version
+      - name: Force Modern Kotlin & SDK Versions in Gradle
         run: |
           python3 - <<'EOF'
           import os, re
 
+          # تنظیمات kotlin در settings.gradle
           settings_gradle = 'android/settings.gradle'
           if os.path.exists(settings_gradle):
               content = open(settings_gradle, encoding='utf-8').read()
@@ -103,14 +104,24 @@ jobs:
                       content = content.replace('plugins {', 'plugins {\n    id "org.jetbrains.kotlin.android" version "2.1.0" apply false')
               open(settings_gradle, 'w', encoding='utf-8').write(content)
 
-          build_gradle = 'android/build.gradle'
-          if os.path.exists(build_gradle):
-              content = open(build_gradle, encoding='utf-8').read()
-              if 'ext.kotlin_version' in content:
-                  content = re.sub(r'ext\.kotlin_version\s*=\s*[\'"][^\'"]+[\'"]', "ext.kotlin_version = '2.1.0'", content)
-              else:
-                  content = "buildscript {\n    ext.kotlin_version = '2.1.0'\n}\n" + content
-              open(build_gradle, 'w', encoding='utf-8').write(content)
+          # تزریق مستقیم compileSdk و targetSdk به فایل build.gradle اصلی اندروید
+          app_build_gradle = 'android/app/build.gradle'
+          if os.path.exists(app_build_gradle):
+              content = open(app_build_gradle, encoding='utf-8').read()
+              # اصلاح یا افزودن مقادیر SDK
+              if 'compileSdk' in content:
+                  content = re.sub(r'compileSdk\s+\d+', 'compileSdk 35', content)
+              if 'targetSdkVersion' in content:
+                  content = re.sub(r'targetSdkVersion\s+\d+', 'targetSdkVersion 35', content)
+              if 'minSdkVersion' in content:
+                  content = re.sub(r'minSdkVersion\s+\d+', 'minSdkVersion 21', content)
+              
+              # اگر به صورت flutter.compileSdkVersion نوشته شده باشد
+              content = content.replace('compileSdkVersion flutter.compileSdkVersion', 'compileSdkVersion 35')
+              content = content.replace('targetSdkVersion flutter.targetSdkVersion', 'targetSdkVersion 35')
+              content = content.replace('minSdkVersion flutter.minSdkVersion', 'minSdkVersion 21')
+              
+              open(app_build_gradle, 'w', encoding='utf-8').write(content)
           EOF
 
       - name: Patch AndroidManifest for Home Launcher
