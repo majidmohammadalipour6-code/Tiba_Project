@@ -13,12 +13,19 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await JustAudioBackground.init(
-    androidNotificationChannelId: 'com.tiba.launcher.audio',
-    androidNotificationChannelName: 'Tiba 2 Music',
-    androidNotificationOngoing: true,
-  );
+  // اجرای ناهمگام و غیرمسدودکننده برای جلوگیری از صفحه سفید اولیه
   runApp(const TibaLauncherApp());
+  
+  // راه‌اندازی سرویس صوت در پس‌زمینه بدون فریز کردن UI اصلی
+  Future.microtask(() async {
+    try {
+      await JustAudioBackground.init(
+        androidNotificationChannelId: 'com.tiba.launcher.audio',
+        androidNotificationChannelName: 'Tiba 2 Music',
+        androidNotificationOngoing: true,
+      );
+    } catch (_) {}
+  });
 }
 
 class TibaLauncherApp extends StatefulWidget {
@@ -39,15 +46,17 @@ class _TibaLauncherAppState extends State<TibaLauncherApp> {
   }
 
   Future<void> _load() async {
-    final p = await SharedPreferences.getInstance();
-    setState(() {
-      _neon = Color(p.getInt('neon') ?? 0xFF7DD3FC);
-      _offset = p.getDouble('offset') ?? 0.0;
-      _maxSpeed = p.getDouble('maxSpeed') ?? 180;
-      _use24h = p.getBool('use24h') ?? true;
-      _keepAwake = p.getBool('keepAwake') ?? true;
-    });
-    WakelockPlus.toggle(enable: _keepAwake);
+    try {
+      final p = await SharedPreferences.getInstance();
+      setState(() {
+        _neon = Color(p.getInt('neon') ?? 0xFF7DD3FC);
+        _offset = p.getDouble('offset') ?? 0.0;
+        _maxSpeed = p.getDouble('maxSpeed') ?? 180;
+        _use24h = p.getBool('use24h') ?? true;
+        _keepAwake = p.getBool('keepAwake') ?? true;
+      });
+      WakelockPlus.toggle(enable: _keepAwake);
+    } catch (_) {}
   }
 
   Future<void> _save() async {
@@ -118,8 +127,13 @@ class _DashboardState extends State<Dashboard> {
   @override
   void initState() {
     super.initState();
-    _startGps();
-    _initAudio();
+    // تاخیر کوتاه برای اینکه مانیتور کاملاً وارد صفحه اصلی شود و لگی نداشته باشد
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        _startGps();
+        _initAudio();
+      }
+    });
   }
 
   @override
@@ -130,48 +144,48 @@ class _DashboardState extends State<Dashboard> {
   }
 
   Future<void> _startGps() async {
-    if (!await Geolocator.isLocationServiceEnabled()) return;
-    var perm = await Geolocator.checkPermission();
-    if (perm == LocationPermission.denied) {
-      perm = await Geolocator.requestPermission();
-      if (perm == LocationPermission.denied) return;
-    }
-    _gpsSub = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.bestForNavigation,
-      ),
-    ).listen((p) {
-      if (mounted) {
-        final kmh = p.speed * 3.6;
-        setState(() => _rawSpeed = kmh > 1.5 ? kmh : 0.0);
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) return;
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+        if (perm == LocationPermission.denied) return;
       }
-    });
+      _gpsSub = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.bestForNavigation,
+          distanceFilter: 2,
+        ),
+      ).listen((p) {
+        if (mounted) {
+          final kmh = p.speed * 3.6;
+          setState(() => _rawSpeed = kmh > 1.5 ? kmh : 0.0);
+        }
+      });
+    } catch (_) {}
   }
 
   Future<void> _initAudio() async {
     try {
       final s = AudioSession.instance;
       await (await s).configure(const AudioSessionConfiguration.music());
-    } catch (_) {}
-    
-    final sp = await SharedPreferences.getInstance();
-    setState(() => _playlist.addAll(sp.getStringList('playlist') ?? []));
+      
+      final sp = await SharedPreferences.getInstance();
+      if (mounted) {
+        setState(() => _playlist.addAll(sp.getStringList('playlist') ?? []));
+      }
 
-    _player.playerStateStream.listen((st) {
-      if (st.processingState == ProcessingState.completed) _next();
-      if (mounted) setState(() {});
-    });
-    _player.positionStream.listen((_) {
-      if (mounted) setState(() {});
-    });
+      _player.playerStateStream.listen((st) {
+        if (st.processingState == ProcessingState.completed) _next();
+        if (mounted) setState(() {});
+      });
 
-    final last = sp.getInt('lastIdx') ?? -1;
-    if (last >= 0 && last < _playlist.length) {
-      setState(() => _idx = last);
-      try {
+      final last = sp.getInt('lastIdx') ?? -1;
+      if (last >= 0 && last < _playlist.length) {
+        setState(() => _idx = last);
         await _player.setAudioSource(_sourceFor(last));
-      } catch (_) {}
-    }
+      }
+    } catch (_) {}
   }
 
   AudioSource _sourceFor(int i) {
@@ -188,16 +202,18 @@ class _DashboardState extends State<Dashboard> {
   }
 
   Future<void> _pick() async {
-    final res = await FilePicker.platform.pickFiles(type: FileType.audio, allowMultiple: true);
-    if (res == null) return;
-    setState(() {
-      for (final p in res.paths) {
-        if (p != null && !_playlist.contains(p)) _playlist.add(p);
-      }
-    });
-    final sp = await SharedPreferences.getInstance();
-    await sp.setStringList('playlist', _playlist);
-    if (_idx == -1 && _playlist.isNotEmpty) _play(0);
+    try {
+      final res = await FilePicker.platform.pickFiles(type: FileType.audio, allowMultiple: true);
+      if (res == null) return;
+      setState(() {
+        for (final p in res.paths) {
+          if (p != null && !_playlist.contains(p)) _playlist.add(p);
+        }
+      });
+      final sp = await SharedPreferences.getInstance();
+      await sp.setStringList('playlist', _playlist);
+      if (_idx == -1 && _playlist.isNotEmpty) _play(0);
+    } catch (_) {}
   }
 
   Future<void> _play(int i) async {
@@ -209,8 +225,10 @@ class _DashboardState extends State<Dashboard> {
     } catch (_) {
       _next();
     }
-    final sp = await SharedPreferences.getInstance();
-    await sp.setInt('lastIdx', _idx);
+    try {
+      final sp = await SharedPreferences.getInstance();
+      await sp.setInt('lastIdx', _idx);
+    } catch (_) {}
   }
 
   void _next() => _playlist.isNotEmpty ? _play((_idx + 1) % _playlist.length) : null;
@@ -224,12 +242,14 @@ class _DashboardState extends State<Dashboard> {
   }
 
   Future<void> _launch(String scheme, String web) async {
-    final u = Uri.parse(scheme);
-    if (await canLaunchUrl(u)) {
-      await launchUrl(u);
-    } else {
-      await launchUrl(Uri.parse(web), mode: LaunchMode.externalApplication);
-    }
+    try {
+      final u = Uri.parse(scheme);
+      if (await canLaunchUrl(u)) {
+        await launchUrl(u);
+      } else {
+        await launchUrl(Uri.parse(web), mode: LaunchMode.externalApplication);
+      }
+    } catch (_) {}
   }
 
   void _showSettings() {
