@@ -39,7 +39,6 @@ jobs:
           if [ -d "/tmp/backup/lib" ]; then cp -r /tmp/backup/lib/* lib/; fi
           if [ -f "/tmp/backup/pubspec.yaml" ]; then cp /tmp/backup/pubspec.yaml pubspec.yaml; fi
 
-          # تنظیم قطعی نسخه کاتلین 1.9.22 در هر دو فایل تنظیمات گرادل
           if [ -f "android/build.gradle" ]; then
             sed -i 's/ext.kotlin_version = .*/ext.kotlin_version = "1.9.22"/' android/build.gradle
           fi
@@ -50,11 +49,11 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: Build Debug APK
-        run: flutter build apk --debug --no-tree-shake-icons
+      - name: Build Split Release APKs
+        run: flutter build apk --release --split-per-abi --no-tree-shake-icons
 
-      - name: Upload APK Artifact
+      - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Tiba-Dashboard-APK
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          name: Tiba-Dashboard-APKs
+          path: build/app/outputs/flutter-apk/*.apk
