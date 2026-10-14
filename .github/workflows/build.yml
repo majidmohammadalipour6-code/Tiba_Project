@@ -87,35 +87,64 @@ jobs:
 
       - name: Fetch Dependencies
         run: |
-          flutter pub upgrade geolocator
           flutter pub get
 
-      - name: Force Patch All Android Plugins build.gradle
+      - name: Directly Replace Corrupted Geolocator Build File
         run: |
           python3 - <<'EOF'
-          import glob
-          import re
+          import os
 
-          # تمام پلاگین‌های اندرویدی دانلود شده در کش پاپ را بررسی و خطوط نامعتبر را پاکسازی می‌کنیم
-          pattern = '/home/runner/.pub-cache/hosted/pub.dev/*/android/build.gradle'
-          files = glob.glob(pattern)
+          # فایل استاندارد مستقل گریدل برای geolocator_android
+          clean_gradle = """
+          group 'com.baseflow.geolocator'
+          version '1.0-SNAPSHOT'
 
-          for fpath in files:
-              with open(fpath, 'r', encoding='utf-8') as f:
-                  content = f.read()
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.1.0'
+              }
+          }
 
-              modified = False
-              # اصلاح صریح هرگونه فراخوانی فلاتر در گریدل پلاگین‌ها
-              if 'flutter.compileSdkVersion' in content or 'android.flutter' in content:
-                  content = re.sub(r'compileSdkVersion\s+.*flutter.*', 'compileSdkVersion 35', content)
-                  content = re.sub(r'targetSdkVersion\s+.*flutter.*', 'targetSdkVersion 35', content)
-                  content = re.sub(r'minSdkVersion\s+.*flutter.*', 'minSdkVersion 21', content)
-                  modified = True
+          apply plugin: 'com.android.library'
 
-              if modified:
-                  print(f"Patched legacy plugin: {fpath}")
-                  with open(fpath, 'w', encoding='utf-8') as f:
-                      f.write(content)
+          android {
+              namespace "com.baseflow.geolocator"
+              compileSdkVersion 35
+
+              defaultConfig {
+                  minSdkVersion 21
+                  testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+              }
+
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_1_8
+                  targetCompatibility JavaVersion.VERSION_1_8
+              }
+          }
+
+          dependencies {
+              implementation "com.google.android.gms:play-services-location:21.2.0"
+              implementation "androidx.annotation:annotation:1.7.1"
+              implementation "androidx.core:core:1.13.1"
+          }
+          """
+
+          # پیدا کردن محل دقیق تمام نسخه‌های geolocator_android در کل هوم
+          home = os.path.expanduser('~')
+          count = 0
+          for root, dirs, files in os.walk(home):
+              if 'geolocator_android' in root and 'build.gradle' in files:
+                  gradle_file = os.path.join(root, 'build.gradle')
+                  with open(gradle_file, 'w', encoding='utf-8') as f:
+                      f.write(clean_gradle.strip())
+                  print(f"Successfully overwritten: {gradle_file}")
+                  count += 1
+
+          print(f"Total geolocator files replaced: {count}")
           EOF
 
       - name: Set SDK Versions
