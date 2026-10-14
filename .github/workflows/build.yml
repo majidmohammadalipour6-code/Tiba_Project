@@ -25,17 +25,68 @@ jobs:
           flutter-version: '3.24.3'
           channel: 'stable'
 
-      - name: Check & Fix Android Structure
+      - name: Create Android Platform if Missing
         run: |
           if [ ! -d "android" ]; then
             flutter create . --platforms=android --org com.tiba.launcher --project-name tiba_project
           fi
 
-      - name: Ensure Assets Exist
+      - name: Inject Custom MainActivity for App Drawer
         run: |
-          if [ ! -f "tiba2.png" ]; then
-            python3 -c "import base64; open('tiba2.png','wb').write(base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='))"
-          fi
+          python3 - <<'EOF'
+          import os
+
+          main_activity_path = 'android/app/src/main/kotlin/com/tiba/launcher/MainActivity.kt'
+          os.makedirs(os.path.dirname(main_activity_path), exist_ok=True)
+          
+          kotlin_code = '''package com.tiba.launcher
+
+          import android.content.Intent
+          import android.content.pm.PackageManager
+          import io.flutter.embedding.android.FlutterActivity
+          import io.flutter.embedding.engine.FlutterEngine
+          import io.flutter.plugin.common.MethodChannel
+
+          class MainActivity: FlutterActivity() {
+              private val CHANNEL = "com.tiba.launcher/app"
+
+              override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+                  super.configureFlutterEngine(flutterEngine)
+                  MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+                      when (call.method) {
+                          "openApp" -> {
+                              val packageName = call.argument<String>("package")
+                              val intent = packageManager.getLaunchIntentForPackage(packageName ?: "")
+                              if (intent != null) {
+                                  startActivity(intent)
+                                  result.success(true)
+                              } else {
+                                  result.error("UNAVAILABLE", "App not found", null)
+                              }
+                          }
+                          "getInstalledApps" -> {
+                              val pm = packageManager
+                              val intent = Intent(Intent.ACTION_MAIN, null).addCategory(Intent.CATEGORY_LAUNCHER)
+                              val resolveInfos = pm.queryIntentActivities(intent, 0)
+                              val apps = mutableListOf<Map<String, String>>()
+                              for (resolveInfo in resolveInfos) {
+                                  val appName = resolveInfo.loadLabel(pm).toString()
+                                  val packageName = resolveInfo.activityInfo.packageName
+                                  apps.add(mapOf("name" to appName, "package" to packageName))
+                              }
+                              result.success(apps)
+                          }
+                          else -> result.notImplemented()
+                      }
+                  }
+              }
+          }
+          '''
+          
+          with open(main_activity_path, 'w', encoding='utf-8') as f:
+              f.write(kotlin_code)
+          print("MainActivity.kt injected successfully.")
+          EOF
 
       - name: Force Modern Kotlin Version
         run: |
@@ -62,7 +113,7 @@ jobs:
               open(build_gradle, 'w', encoding='utf-8').write(content)
           EOF
 
-      - name: Patch AndroidManifest
+      - name: Patch AndroidManifest for Home Launcher
         run: |
           python3 - <<'EOF'
           import os
@@ -70,18 +121,6 @@ jobs:
           path = 'android/app/src/main/AndroidManifest.xml'
           if os.path.exists(path):
               s = open(path, encoding='utf-8').read()
-              perms = '''    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-                  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-                  <uses-permission android:name="android.permission.WAKE_LOCK" />
-                  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-                  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-                  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-                  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-              '''
-              if 'FOREGROUND_SERVICE_MEDIA_PLAYBACK' not in s:
-                  idx = s.index('>') + 1
-                  s = s[:idx] + '\n' + perms + s[idx:]
-
               if 'category.HOME' not in s:
                   s = s.replace(
                       '<category android:name="android.intent.category.LAUNCHER" />',
@@ -89,10 +128,6 @@ jobs:
                       '                <category android:name="android.intent.category.HOME" />\n'
                       '                <category android:name="android.intent.category.DEFAULT" />'
                   )
-
-              if 'launchMode' not in s:
-                  s = s.replace('<activity', '<activity\n                android:launchMode="singleTask"', 1)
-              
               open(path, 'w', encoding='utf-8').write(s)
           EOF
 
@@ -105,73 +140,6 @@ jobs:
       - name: Fetch Dependencies
         run: |
           flutter pub get
-
-      - name: Bruteforce Patch All Cached Plugins
-        run: |
-          python3 - <<'EOF'
-          import os
-
-          cache_dir = os.path.expanduser('~/.pub-cache')
-          for root, dirs, files in os.walk(cache_dir):
-              for file in files:
-                  if file.endswith('build.gradle'):
-                      filepath = os.path.join(root, file)
-                      try:
-                          with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
-                              lines = f.readlines()
-                          
-                          changed = False
-                          new_lines = []
-                          for line in lines:
-                              if 'compileSdkVersion' in line and ('flutter' in line or 'project.' in line):
-                                  new_lines.append('    compileSdkVersion 35\n')
-                                  changed = True
-                              elif 'compileSdk ' in line and ('flutter' in line or 'project.' in line):
-                                  new_lines.append('    compileSdk = 35\n')
-                                  changed = True
-                              elif 'minSdkVersion' in line and ('flutter' in line or 'project.' in line):
-                                  new_lines.append('    minSdkVersion 21\n')
-                                  changed = True
-                              elif 'targetSdkVersion' in line and ('flutter' in line or 'project.' in line):
-                                  new_lines.append('    targetSdkVersion 35\n')
-                                  changed = True
-                              else:
-                                  new_lines.append(line)
-                          
-                          if changed:
-                              with open(filepath, 'w', encoding='utf-8') as f:
-                                  f.writelines(new_lines)
-                      except Exception:
-                          pass
-          EOF
-
-      - name: Overwrite Known Fragile Plugins
-        run: |
-          find /home/runner/.pub-cache -name "build.gradle" | grep "geolocator_android" | while read file; do
-            cat << 'GRADLE_EOF' > "$file"
-          group 'com.baseflow.geolocator'
-          version '1.0-SNAPSHOT'
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.1.0' }
-          }
-          apply plugin: 'com.android.library'
-          android {
-              namespace "com.baseflow.geolocator"
-              compileSdkVersion 35
-              defaultConfig { minSdkVersion 21 }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_1_8
-                  targetCompatibility JavaVersion.VERSION_1_8
-              }
-          }
-          dependencies {
-              implementation 'com.google.android.gms:play-services-location:21.2.0'
-              implementation 'androidx.annotation:annotation:1.7.1'
-              implementation 'androidx.core:core:1.13.1'
-          }
-          GRADLE_EOF
-          done
 
       - name: Build Launcher APK
         run: |
