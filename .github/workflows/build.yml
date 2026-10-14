@@ -88,39 +88,64 @@ jobs:
           print("MainActivity.kt injected successfully.")
           EOF
 
-      - name: Force Modern Kotlin & SDK Versions in Gradle
+      - name: Fix Root and App Gradle for SDK 35 & Geolocator
         run: |
           python3 - <<'EOF'
           import os, re
 
-          # تنظیمات kotlin در settings.gradle
+          # ۱. اصلاح فایل settings.gradle برای کاتلین ۲.۱.۰
           settings_gradle = 'android/settings.gradle'
           if os.path.exists(settings_gradle):
               content = open(settings_gradle, encoding='utf-8').read()
               if 'org.jetbrains.kotlin.android' in content:
                   content = re.sub(r'id\s+["\']org\.jetbrains\.kotlin\.android["\']\s+version\s+["\'][^"\']+["\']', 'id "org.jetbrains.kotlin.android" version "2.1.0"', content)
-              else:
-                  if 'plugins {' in content:
-                      content = content.replace('plugins {', 'plugins {\n    id "org.jetbrains.kotlin.android" version "2.1.0" apply false')
               open(settings_gradle, 'w', encoding='utf-8').write(content)
 
-          # تزریق مستقیم compileSdk و targetSdk به فایل build.gradle اصلی اندروید
+          # ۲. تزریق متغیرهای سراسری فلاتر و SDK به فایل build.gradle ریشه
+          root_build_gradle = 'android/build.gradle'
+          if os.path.exists(root_build_gradle):
+              content = open(root_build_gradle, encoding='utf-8').read()
+              ext_block = """
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.buildDir = '../build'
+          subprojects {
+              project.buildDir = "${rootProject.buildDir}/${project.name}"
+          }
+          subprojects {
+              afterEvaluate { project ->
+                  if (project.hasProperty("android")) {
+                      project.android {
+                          if (namespace == null) {
+                              namespace project.group
+                          }
+                          compileSdkVersion 35
+                          defaultConfig {
+                              minSdkVersion 21
+                              targetSdkVersion 35
+                          }
+                      }
+                  }
+              }
+          }
+          """
+              # اگر ارتقای اساسی لازم باشد، جایگزین می‌کنیم
+              if 'subprojects' not in content:
+                  content += ext_block
+              open(root_build_gradle, 'w', encoding='utf-8').write(content)
+
+          # ۳. تنظیمات اپلیکیشن build.gradle
           app_build_gradle = 'android/app/build.gradle'
           if os.path.exists(app_build_gradle):
               content = open(app_build_gradle, encoding='utf-8').read()
-              # اصلاح یا افزودن مقادیر SDK
-              if 'compileSdk' in content:
-                  content = re.sub(r'compileSdk\s+\d+', 'compileSdk 35', content)
-              if 'targetSdkVersion' in content:
-                  content = re.sub(r'targetSdkVersion\s+\d+', 'targetSdkVersion 35', content)
-              if 'minSdkVersion' in content:
-                  content = re.sub(r'minSdkVersion\s+\d+', 'minSdkVersion 21', content)
-              
-              # اگر به صورت flutter.compileSdkVersion نوشته شده باشد
               content = content.replace('compileSdkVersion flutter.compileSdkVersion', 'compileSdkVersion 35')
               content = content.replace('targetSdkVersion flutter.targetSdkVersion', 'targetSdkVersion 35')
               content = content.replace('minSdkVersion flutter.minSdkVersion', 'minSdkVersion 21')
-              
               open(app_build_gradle, 'w', encoding='utf-8').write(content)
           EOF
 
@@ -154,7 +179,7 @@ jobs:
 
       - name: Build Launcher APK
         run: |
-          flutter build apk --release --no-pub
+          flutter block build apk --release --no-pub || flutter build apk --release --no-pub
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
