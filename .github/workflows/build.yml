@@ -19,7 +19,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Set up Flutter (Updated for modern SDK compatibility)
+      - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.24.3'
@@ -31,18 +31,57 @@ jobs:
             flutter create . --platforms=android --org com.tiba.launcher --project-name tiba_project
           fi
 
+      - name: Ensure Assets Exist (Placeholder if missing)
+        run: |
+          if [ ! -f "tiba2.png" ]; then
+            python3 -c "import base64; open('tiba2.png','wb').write(base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='))"
+          fi
+
       - name: Update Kotlin Gradle plugin version
         run: |
           KOTLIN_VERSION="1.9.23"
           if grep -q "ext.kotlin_version" android/build.gradle 2>/dev/null; then
             sed -i.bak "s/ext.kotlin_version *= *'[^']*'/ext.kotlin_version = '$KOTLIN_VERSION'/" android/build.gradle
-            echo "Updated ext.kotlin_version"
           elif grep -q "org.jetbrains.kotlin" android/settings.gradle 2>/dev/null; then
             sed -i.bak "s/id \"org.jetbrains.kotlin.android\" version \"[^\"]*\"/id \"org.jetbrains.kotlin.android\" version \"$KOTLIN_VERSION\"/; s/id 'org.jetbrains.kotlin.android' version '[^']*'/id 'org.jetbrains.kotlin.android' version '$KOTLIN_VERSION'/" android/settings.gradle
-            echo "Updated kotlin plugin in settings.gradle"
           fi
 
-      - name: Patch AndroidManifest (launcher mode + audio service + permissions)
+      - name: Fix Subprojects compileSdkVersion & Flutter Extension
+        run: |
+          python3 - <<'EOF'
+          path = 'android/build.gradle'
+          with open(path, 'r', encoding='utf-8') as f:
+              content = f.read()
+
+          subproject_fix = """
+          subprojects {
+              afterEvaluate { project ->
+                  if (project.hasProperty('android')) {
+                      project.android {
+                          if (namespace == null) {
+                              namespace project.group
+                          }
+                          compileSdkVersion 35
+                          buildToolsVersion "34.0.0"
+                          defaultConfig {
+                              minSdkVersion 21
+                              targetSdkVersion 35
+                          }
+                      }
+                  }
+              }
+          }
+          """
+          if 'subprojects {' not in content:
+              content += "\n" + subproject_fix
+          else:
+              content = content.replace("subprojects {", "subprojects {\n    afterEvaluate { project ->\n        if (project.hasProperty('android')) {\n            project.android {\n                compileSdkVersion 35\n            }\n        }\n    }\n")
+
+          with open(path, 'w', encoding='utf-8') as f:
+              f.write(content)
+          EOF
+
+      - name: Patch AndroidManifest
         run: |
           python3 - <<'EOF'
           path = 'android/app/src/main/AndroidManifest.xml'
@@ -88,14 +127,13 @@ jobs:
               s = s.replace('</application>', svc + '\n    </application>')
 
           open(path, 'w', encoding='utf-8').write(s)
-          print('Manifest patched successfully.')
           EOF
 
       - name: Set SDK Versions in local.properties
         run: |
           echo "flutter.minSdkVersion=21" >> android/local.properties
-          echo "flutter.targetSdkVersion=34" >> android/local.properties
-          echo "flutter.compileSdkVersion=34" >> android/local.properties
+          echo "flutter.targetSdkVersion=35" >> android/local.properties
+          echo "flutter.compileSdkVersion=35" >> android/local.properties
 
       - name: Build Launcher APK
         run: |
