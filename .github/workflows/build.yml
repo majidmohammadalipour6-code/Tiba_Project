@@ -37,48 +37,35 @@ jobs:
             python3 -c "import base64; open('tiba2.png','wb').write(base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='))"
           fi
 
-      - name: Update Kotlin Gradle plugin version
-        run: |
-          KOTLIN_VERSION="1.9.23"
-          if grep -q "ext.kotlin_version" android/build.gradle 2>/dev/null; then
-            sed -i.bak "s/ext.kotlin_version *= *'[^']*'/ext.kotlin_version = '$KOTLIN_VERSION'/" android/build.gradle
-          elif grep -q "org.jetbrains.kotlin" android/settings.gradle 2>/dev/null; then
-            sed -i.bak "s/id \"org.jetbrains.kotlin.android\" version \"[^\"]*\"/id \"org.jetbrains.kotlin.android\" version \"$KOTLIN_VERSION\"/; s/id 'org.jetbrains.kotlin.android' version '[^']*'/id 'org.jetbrains.kotlin.android' version '$KOTLIN_VERSION'/" android/settings.gradle
-          fi
-
-      - name: Fix Subprojects compileSdkVersion & Flutter Extension
+      - name: Patch Gradle for Legacy Plugins
         run: |
           python3 - <<'EOF'
-          path = 'android/build.gradle'
+          # اصلاح فایل settings.gradle برای رفع خطای flutter property در پلاگین‌های قدیمی
+          path = 'android/settings.gradle'
           with open(path, 'r', encoding='utf-8') as f:
               content = f.read()
 
-          subproject_fix = """
-          subprojects {
+          # اگر پلاگینی دنبال flutter در ساختار اندروید گشت، به صورت جهانی تزریق می‌کنیم
+          root_gradle = 'android/build.gradle'
+          with open(root_gradle, 'r', encoding='utf-8') as f:
+              bg = f.read()
+
+          fix_block = """
+          allprojects {
               afterEvaluate { project ->
-                  if (project.hasProperty('android')) {
+                  if (project.plugins.hasPlugin("com.android.application") ||
+                      project.plugins.hasPlugin("com.android.library")) {
                       project.android {
-                          if (namespace == null) {
-                              namespace project.group
-                          }
-                          compileSdkVersion 35
+                          compileSdkVersion 34
                           buildToolsVersion "34.0.0"
-                          defaultConfig {
-                              minSdkVersion 21
-                              targetSdkVersion 35
-                          }
                       }
                   }
               }
           }
           """
-          if 'subprojects {' not in content:
-              content += "\n" + subproject_fix
-          else:
-              content = content.replace("subprojects {", "subprojects {\n    afterEvaluate { project ->\n        if (project.hasProperty('android')) {\n            project.android {\n                compileSdkVersion 35\n            }\n        }\n    }\n")
-
-          with open(path, 'w', encoding='utf-8') as f:
-              f.write(content)
+          if 'compileSdkVersion 34' not in bg:
+              with open(root_gradle, 'a', encoding='utf-8') as f:
+                  f.write(fix_block)
           EOF
 
       - name: Patch AndroidManifest
@@ -129,14 +116,9 @@ jobs:
           open(path, 'w', encoding='utf-8').write(s)
           EOF
 
-      - name: Set SDK Versions in local.properties
-        run: |
-          echo "flutter.minSdkVersion=21" >> android/local.properties
-          echo "flutter.targetSdkVersion=35" >> android/local.properties
-          echo "flutter.compileSdkVersion=35" >> android/local.properties
-
       - name: Build Launcher APK
         run: |
+          flutter pub upgrade geolocator
           flutter pub get
           flutter build apk --release
 
