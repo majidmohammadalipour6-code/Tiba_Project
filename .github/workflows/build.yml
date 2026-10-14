@@ -37,50 +37,32 @@ jobs:
             python3 -c "import base64; open('tiba2.png','wb').write(base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='))"
           fi
 
-      - name: Upgrade Kotlin Version
+      - name: Force Modern Kotlin Version
         run: |
           python3 - <<'EOF'
           import os, re
 
+          # ۱. تنظیم در settings.gradle
           settings_gradle = 'android/settings.gradle'
           if os.path.exists(settings_gradle):
               content = open(settings_gradle, encoding='utf-8').read()
-              content = re.sub(r'id "org\.jetbrains\.kotlin\.android" version "[^"]+"', 'id "org.jetbrains.kotlin.android" version "2.0.21"', content)
+              if 'org.jetbrains.kotlin.android' in content:
+                  content = re.sub(r'id\s+["\']org\.jetbrains\.kotlin\.android["\']\s+version\s+["\'][^"\']+["\']', 'id "org.jetbrains.kotlin.android" version "2.1.0"', content)
+              else:
+                  # اضافه کردن به بلوک plugins
+                  if 'plugins {' in content:
+                      content = content.replace('plugins {', 'plugins {\n    id "org.jetbrains.kotlin.android" version "2.1.0" apply false')
               open(settings_gradle, 'w', encoding='utf-8').write(content)
 
+          # ۲. تنظیم در root build.gradle
           build_gradle = 'android/build.gradle'
           if os.path.exists(build_gradle):
               content = open(build_gradle, encoding='utf-8').read()
               if 'ext.kotlin_version' in content:
-                  content = re.sub(r'ext\.kotlin_version\s*=\s*[\'"][^\'"]+[\'"]', "ext.kotlin_version = '2.0.21'", content)
+                  content = re.sub(r'ext\.kotlin_version\s*=\s*[\'"][^\'"]+[\'"]', "ext.kotlin_version = '2.1.0'", content)
               else:
-                  content = "buildscript { ext.kotlin_version = '2.0.21' }\n" + content
+                  content = "buildscript {\n    ext.kotlin_version = '2.1.0'\n}\n" + content
               open(build_gradle, 'w', encoding='utf-8').write(content)
-          EOF
-
-      - name: Fix App Build Gradle Sdk Versions
-        run: |
-          python3 - <<'EOF'
-          path = 'android/app/build.gradle'
-          with open(path, 'r', encoding='utf-8') as f:
-              lines = f.readlines()
-
-          new_lines = []
-          for line in lines:
-              # بازنویسی تمیز مقادیر sdk فقط در صورتی که مربوط به android باشند
-              if 'compileSdkVersion' in line:
-                  new_lines.append('    compileSdkVersion 35\n')
-              elif 'compileSdk ' in line or 'compileSdk=' in line:
-                  new_lines.append('    compileSdk = 35\n')
-              elif 'minSdkVersion' in line and 'flutter' not in line:
-                  new_lines.append('        minSdkVersion 21\n')
-              elif 'targetSdkVersion' in line and 'flutter' not in line:
-                  new_lines.append('        targetSdkVersion 35\n')
-              else:
-                  new_lines.append(line)
-
-          with open(path, 'w', encoding='utf-8') as f:
-              f.writelines(new_lines)
           EOF
 
       - name: Patch AndroidManifest
@@ -140,45 +122,6 @@ jobs:
       - name: Fetch Dependencies
         run: |
           flutter pub get
-
-      - name: Patch Plugins In Pub Cache
-        run: |
-          python3 - <<'EOF'
-          import os
-
-          cache_dir = os.path.expanduser('~/.pub-cache')
-          for root, dirs, files in os.walk(cache_dir):
-              for file in files:
-                  if file == 'build.gradle':
-                      path = os.path.join(root, file)
-                      try:
-                          with open(path, 'r', encoding='utf-8', errors='ignore') as f:
-                              lines = f.readlines()
-                          
-                          changed = False
-                          new_lines = []
-                          for line in lines:
-                              if 'flutter.compileSdkVersion' in line:
-                                  new_lines.append('    compileSdkVersion 35\n')
-                                  changed = True
-                              elif 'flutter.targetSdkVersion' in line:
-                                  new_lines.append('    targetSdkVersion 35\n')
-                                  changed = True
-                              elif 'flutter.minSdkVersion' in line:
-                                  new_lines.append('    minSdkVersion 21\n')
-                                  changed = True
-                              elif 'compileSdkVersion' in line and ('project.android.flutter' in line or 'flutter.' in line):
-                                  new_lines.append('    compileSdkVersion 35\n')
-                                  changed = True
-                              else:
-                                  new_lines.append(line)
-                          
-                          if changed:
-                              with open(path, 'w', encoding='utf-8') as f:
-                                  f.writelines(new_lines)
-                      except Exception as e:
-                          pass
-          EOF
 
       - name: Overwrite Broken Geolocator Gradle
         run: |
