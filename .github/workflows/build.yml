@@ -93,7 +93,7 @@ jobs:
           python3 - <<'EOF'
           import os, re
 
-          # ۱. اصلاح فایل settings.gradle برای کاتلین ۲.۱.۰
+          # ۱. تنظیمات settings.gradle
           settings_gradle = 'android/settings.gradle'
           if os.path.exists(settings_gradle):
               content = open(settings_gradle, encoding='utf-8').read()
@@ -101,22 +101,11 @@ jobs:
                   content = re.sub(r'id\s+["\']org\.jetbrains\.kotlin\.android["\']\s+version\s+["\'][^"\']+["\']', 'id "org.jetbrains.kotlin.android" version "2.1.0"', content)
               open(settings_gradle, 'w', encoding='utf-8').write(content)
 
-          # ۲. تزریق متغیرهای سراسری فلاتر و SDK به فایل build.gradle ریشه
+          # ۲. تزریق بلاک subprojects برای حل مشکل geolocator_android
           root_build_gradle = 'android/build.gradle'
           if os.path.exists(root_build_gradle):
               content = open(root_build_gradle, encoding='utf-8').read()
               ext_block = """
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-
-          rootProject.buildDir = '../build'
-          subprojects {
-              project.buildDir = "${rootProject.buildDir}/${project.name}"
-          }
           subprojects {
               afterEvaluate { project ->
                   if (project.hasProperty("android")) {
@@ -134,12 +123,11 @@ jobs:
               }
           }
           """
-              # اگر ارتقای اساسی لازم باشد، جایگزین می‌کنیم
               if 'subprojects' not in content:
                   content += ext_block
               open(root_build_gradle, 'w', encoding='utf-8').write(content)
 
-          # ۳. تنظیمات اپلیکیشن build.gradle
+          # ۳. تنظیمات build.gradle اپلیکیشن
           app_build_gradle = 'android/app/build.gradle'
           if os.path.exists(app_build_gradle):
               content = open(app_build_gradle, encoding='utf-8').read()
@@ -147,24 +135,6 @@ jobs:
               content = content.replace('targetSdkVersion flutter.targetSdkVersion', 'targetSdkVersion 35')
               content = content.replace('minSdkVersion flutter.minSdkVersion', 'minSdkVersion 21')
               open(app_build_gradle, 'w', encoding='utf-8').write(content)
-          EOF
-
-      - name: Patch AndroidManifest for Home Launcher
-        run: |
-          python3 - <<'EOF'
-          import os
-
-          path = 'android/app/src/main/AndroidManifest.xml'
-          if os.path.exists(path):
-              s = open(path, encoding='utf-8').read()
-              if 'category.HOME' not in s:
-                  s = s.replace(
-                      '<category android:name="android.intent.category.LAUNCHER" />',
-                      '<category android:name="android.intent.category.LAUNCHER" />\n'
-                      '                <category android:name="android.intent.category.HOME" />\n'
-                      '                <category android:name="android.intent.category.DEFAULT" />'
-                  )
-              open(path, 'w', encoding='utf-8').write(s)
           EOF
 
       - name: Set SDK Properties
@@ -179,7 +149,7 @@ jobs:
 
       - name: Build Launcher APK
         run: |
-          flutter block build apk --release --no-pub || flutter build apk --release --no-pub
+          flutter build apk --release --no-pub
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
