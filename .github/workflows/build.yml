@@ -31,14 +31,13 @@ jobs:
             flutter create . --platforms=android --org com.tiba.launcher --project-name tiba_project
           fi
 
-      - name: Clean Root build.gradle
+      - name: Configure Root build.gradle with Universal Subproject Overrides
         run: |
           python3 - <<'EOF'
           import os
 
           path = 'android/build.gradle'
-          if os.path.exists(path):
-              clean_build_gradle = """allprojects {
+          config = """allprojects {
               repositories {
                   google()
                   mavenCentral()
@@ -48,6 +47,18 @@ jobs:
           rootProject.buildDir = '../build'
           subprojects {
               project.buildDir = "${rootProject.buildDir}/${project.name}"
+              afterEvaluate { project ->
+                  if (project.hasProperty('android')) {
+                      project.android {
+                          compileSdkVersion 35
+                          buildToolsVersion '35.0.0'
+                          defaultConfig {
+                              minSdkVersion 21
+                              targetSdkVersion 35
+                          }
+                      }
+                  }
+              }
           }
           subprojects {
               project.evaluationDependsOn(':app')
@@ -57,8 +68,8 @@ jobs:
               delete rootProject.buildDir
           }
           """
-              with open(path, 'w', encoding='utf-8') as f:
-                  f.write(clean_build_gradle)
+          with open(path, 'w', encoding='utf-8') as f:
+              f.write(config)
           EOF
 
       - name: Force Modern Kotlin Version
@@ -122,49 +133,25 @@ jobs:
         run: |
           flutter pub get
 
-      - name: Universal Auto-Patch All Pub Cache Gradle Files
+      - name: Neutralize Plugin Internal Listeners
         run: |
           python3 - <<'EOF'
-          import os, glob, re
+          import os, glob
 
           cache_dir = os.path.expanduser('~/.pub-cache/hosted/pub.dev')
-          gradle_files = glob.glob(f'{cache_dir}/**/android/build.gradle', recursive=True)
-
-          for g_file in gradle_files:
+          for g_file in glob.glob(f'{cache_dir}/**/android/build.gradle', recursive=True):
               try:
                   with open(g_file, 'r', encoding='utf-8') as f:
-                      content = f.read()
-
-                  modified = False
-
-                  # اصلاح مشکل ارجاع به ویژگی‌های ناموجود flutter.compileSdkVersion
-                  if 'flutter.compileSdkVersion' in content or "flutter['compileSdkVersion']" in content:
-                      content = re.sub(r'compileSdkVersion\s+flutter\.compileSdkVersion', 'compileSdkVersion 35', content)
-                      content = re.sub(r'compileSdkVersion\s+flutter\[[\'"]compileSdkVersion[\'"]\]', 'compileSdkVersion 35', content)
-                      modified = True
-
-                  if 'flutter.minSdkVersion' in content or "flutter['minSdkVersion']" in content:
-                      content = re.sub(r'minSdkVersion\s+flutter\.minSdkVersion', 'minSdkVersion 21', content)
-                      content = re.sub(r'minSdkVersion\s+flutter\[[\'"]minSdkVersion[\'"]\]', 'minSdkVersion 21', content)
-                      modified = True
-
-                  if 'flutter.targetSdkVersion' in content or "flutter['targetSdkVersion']" in content:
-                      content = re.sub(r'targetSdkVersion\s+flutter\.targetSdkVersion', 'targetSdkVersion 35', content)
-                      content = re.sub(r'targetSdkVersion\s+flutter\[[\'"]targetSdkVersion[\'"]\]', 'targetSdkVersion 35', content)
-                      modified = True
-
-                  # رفع ارور wakelock_plus و پلاگین‌های مشابه
-                  if 'android.flutter' in content or "extension 'android' of type" in content or 'wakelock_plus' in g_file:
-                      content = re.sub(r'android\s*\{', 'android {\n    compileSdkVersion 35', content, count=1)
-                      content = re.sub(r'defaultConfig\s*\{', 'defaultConfig {\n        minSdkVersion 21\n        targetSdkVersion 35', content, count=1)
-                      modified = True
-
-                  if modified:
+                      txt = f.read()
+                  
+                  # غیرفعال کردن لیسنرهای مشکل‌ساز substring و null check در پلاگین‌ها
+                  if 'afterEvaluate' in txt and ('geolocator' in g_file or 'wakelock' in g_file):
+                      txt = txt.replace('project.afterEvaluate', '// project.afterEvaluate')
                       with open(g_file, 'w', encoding='utf-8') as f:
-                          f.write(content)
-                      print(f"Patched: {g_file}")
+                          f.write(txt)
+                      print(f"Neutralized listener in: {g_file}")
               except Exception as e:
-                  print(f"Error patching {g_file}: {e}")
+                  pass
           EOF
 
       - name: Build Launcher APK
