@@ -54,9 +54,10 @@ jobs:
               <uses-permission android:name="android.permission.WAKE_LOCK" />
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
           '''
           if 'FOREGROUND_SERVICE_MEDIA_PLAYBACK' not in s:
-              # insert right after opening <manifest ...> tag
               idx = s.index('>') + 1
               s = s[:idx] + '\n' + perms + s[idx:]
 
@@ -91,51 +92,22 @@ jobs:
               s = s.replace('</application>', svc + '\n    </application>')
 
           open(path, 'w', encoding='utf-8').write(s)
-          print('Manifest patched:')
-          print(s)
+          print('Manifest patched successfully.')
           EOF
 
-      - name: Update Kotlin Gradle plugin version (fallback for old-style projects)
+      - name: Set SDK Versions in local.properties
         run: |
-          if grep -q "ext.kotlin_version" android/build.gradle 2>/dev/null; then
-            sed -i.bak "s/ext.kotlin_version *= *'[^']*'/ext.kotlin_version = '1.9.23'/" android/build.gradle
-          fi
+          echo "flutter.minSdkVersion=21" >> android/local.properties
+          echo "flutter.targetSdkVersion=34" >> android/local.properties
+          echo "flutter.compileSdkVersion=34" >> android/local.properties
 
-      - name: Fix asset paths in pubspec.yaml (find missing files and remap)
+      - name: Build Launcher APK
         run: |
-          python3 - <<'EOF'
-          import os, re
+          flutter pub get
+          flutter build apk --release
 
-          pubspec_path = 'pubspec.yaml'
-          pubspec = open(pubspec_path, encoding='utf-8').read()
-
-          def resolve(path):
-              if os.path.isfile(path):
-                  return path
-              base = os.path.basename(path)
-              for root, dirs, files in os.walk('.'):
-                  dirs[:] = [d for d in dirs if d not in ('.git', 'build', '.dart_tool', '.github')]
-                  if base in files:
-                      return os.path.normpath(os.path.join(root, base))
-              return None
-
-          changed = False
-
-          def fix_line(m):
-              global changed
-              path = m.group(2).strip().strip('"\'')
-              resolved = resolve(path)
-              if resolved and resolved != path:
-                  print(f"Remapped asset: {path} -> {resolved}")
-                  changed = True
-                  return f"{m.group(1)}{resolved}"
-              if resolved is None:
-                  os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
-                  png = bytes.fromhex(
-                      '89504e470d0a1a0a0000000d4948445200000001000000010806'
-                      '0000001f15c4890000000d49444154789c6360000002000148'
-                      'afa0720000000049454e44ae426082'
-                  )
-                  with open(path, 'wb') as f:
-                      f.write(png)
-                   print(f"Created placeholder asset: {path}")
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tiba2_Launcher_App
+          path: build/app/outputs/flutter-apk/app-release.apk
