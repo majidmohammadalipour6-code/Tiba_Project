@@ -85,41 +85,6 @@ jobs:
           open(path, 'w', encoding='utf-8').write(s)
           EOF
 
-      - name: Global Fix for All Legacy Plugins in Gradle
-        run: |
-          python3 - <<'EOF'
-          bg_path = 'android/build.gradle'
-          gradle_fix = """
-          allprojects {
-              afterEvaluate { project ->
-                  if (project.hasProperty('android')) {
-                      project.android {
-                          if (namespace == null) {
-                              namespace project.group
-                          }
-                          compileSdkVersion 35
-                          if (project.android.hasProperty('defaultConfig')) {
-                              defaultConfig {
-                                  targetSdkVersion 35
-                              }
-                          }
-                          // حل مشکل ناشناخته بودن شیء flutter برای تمام پلاگین‌ها
-                          extensions.findByName('flutter')?.metaClass?.compileSdkVersion = 35
-                          metaClass.flutter = [
-                              compileSdkVersion: 35,
-                              minSdkVersion: 21,
-                              targetSdkVersion: 35
-                          ]
-                      }
-                  }
-              }
-          }
-          """
-          with open(bg_path, 'a', encoding='utf-8') as f:
-              f.write("\n" + gradle_fix)
-          print("Successfully injected global Gradle fix!")
-          EOF
-
       - name: Set SDK Versions
         run: |
           echo "flutter.minSdkVersion=21" >> android/local.properties
@@ -130,9 +95,45 @@ jobs:
         run: |
           flutter pub get
 
+      - name: Auto-Patch All Cached Plugins Gradle Files
+        run: |
+          python3 - <<'EOF'
+          import os
+          import re
+
+          cache_dir = os.path.expanduser('~/.pub-cache')
+          count = 0
+
+          for root, dirs, files in os.walk(cache_dir):
+              for file in files:
+                  if file == 'build.gradle':
+                      fpath = os.path.join(root, file)
+                      try:
+                          with open(fpath, 'r', encoding='utf-8', errors='ignore') as f:
+                              text = f.read()
+
+                          # جایگزینی هرگونه استفاده از flutter.*SdkVersion با عدد مستقیم
+                          new_text = re.sub(r'compileSdkVersion\s+.*flutter.*', 'compileSdkVersion 35', text)
+                          new_text = re.sub(r'targetSdkVersion\s+.*flutter.*', 'targetSdkVersion 35', new_text)
+                          new_text = re.sub(r'minSdkVersion\s+.*flutter.*', 'minSdkVersion 21', new_text)
+
+                          # اگر خطای flutter به صورت شیء مجزا وجود داشت
+                          new_text = re.sub(r'flutter\s*\{[^}]*\}', '', new_text)
+
+                          if new_text != text:
+                              with open(fpath, 'w', encoding='utf-8') as f:
+                                  f.write(new_text)
+                              count += 1
+                              print(f"Patched: {fpath}")
+                      except Exception as e:
+                          pass
+
+          print(f"Total plugin gradle files patched: {count}")
+          EOF
+
       - name: Build Launcher APK
         run: |
-          flutter build apk --release
+          flutter build apk --release --no-pub
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
