@@ -27,20 +27,18 @@ jobs:
 
       - name: Clean Build via Temp Project
         run: |
-          # ساخت یک پروژه موقت کاملاً استاندارد و سالم
           flutter create temp_app --platforms=android --org com.tiba.launcher --project-name tiba_project
           
-          # کپی کردن کدهای دارت و پاب‌اسپک خودمان به پروژه جدید
           rm -rf temp_app/lib temp_app/pubspec.yaml
           cp -r lib temp_app/
           cp pubspec.yaml temp_app/
           
-          # انتقال به پوشه موقت و اجرای بیلد
           cd temp_app
           flutter pub get
-          flutter build apk --split-per-abi
           
-          # کپی کردن خروجی APK به پوشه اصلی برای آپلود
+          # بیلد با جزئیات کامل و حالت verbose برای دیدن خطای دقیق دارت
+          flutter build apk --split-per-abi --verbose
+          
           mkdir -p ../build/app/outputs/flutter-apk/
           cp build/app/outputs/flutter-apk/*.apk ../build/app/outputs/flutter-apk/
 
