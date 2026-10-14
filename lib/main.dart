@@ -19,7 +19,7 @@ class TibaLauncherApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Tiba 2 HUD Launcher',
+      title: 'Tiba 2 HUD CarPlay',
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF050811),
       ),
@@ -40,12 +40,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double _currentSpeed = 0.0;
   StreamSubscription<Position>? _positionStream;
 
-  // موزیک پلیر پیشرفته با پشتیبانی از پلی‌لیست و ذخیره پوزیشن
+  // موزیک پلیر پلی‌لیست
   final AudioPlayer _audioPlayer = AudioPlayer();
   ConcatenatingAudioSource? _playlist;
   bool _isPlaying = false;
   String _currentSongTitle = "بدون آهنگ انتخابی";
-  int _currentSongIndex = 0;
 
   // ساعت نوار بالا
   late Timer _clockTimer;
@@ -66,7 +65,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _loadSettings();
   }
 
-  // بارگذاری تنظیمات ذخیره شده
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -129,18 +127,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         });
       }
     });
-
-    _audioPlayer.currentIndexStream.listen((index) {
-      if (index != null && _playlist != null && mounted) {
-        setState(() {
-          _currentSongIndex = index;
-          // نام آهنگ فعلی را بر اساس فایل‌ها تنظیم می‌کنیم
-        });
-      }
-    });
   }
 
-  // انتخاب چند آهنگ برای تشکیل پلی‌لیست و پخش پشت سر هم
   Future<void> _pickAndPlayMultipleMusic() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -182,6 +170,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Future<void> _openDialer() async {
+    final intent = AndroidIntent(
+      action: 'android.intent.action.DIAL',
+      flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
+    );
+    try {
+      await intent.launch();
+    } catch (e) {
+      debugPrint("خطا در باز کردن تلفن: $e");
+    }
+  }
+
   Future<void> _openAndroidSettings(String action) async {
     final intent = AndroidIntent(
       action: action,
@@ -209,7 +209,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Scaffold(
         body: Row(
           children: [
-            // ۱. سایدبار عمودی سمت چپ (دقیقاً مشابه عکس)
+            // ۱. سایدبار عمودی سمت چپ
             _buildVerticalSidebar(),
 
             // ۲. صفحه اصلی داشبورد
@@ -226,11 +226,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Expanded(flex: 3, child: _buildNavigationCard()),
                           const SizedBox(width: 14),
 
-                          // ب) کارت مرکز: سرعت‌سنج HUD مدرن و دایره‌ای
+                          // ب) کارت مرکز: سرعت‌سنج HUD دایره‌ای دوگانه
                           Expanded(flex: 4, child: _buildCenterSpeedHud()),
                           const SizedBox(width: 14),
 
-                          // ج) کارت‌های سمت راست: مدیاپلیر (بالا) و عکس خودرو تیبا ۲ (پایین)
+                          // ج) کارت‌های سمت راست: مدیاپلیر (بالا) و عکس بزرگ تیبا ۲ (پایین)
                           Expanded(
                             flex: 3,
                             child: Column(
@@ -254,7 +254,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // نوار وضعیت بالای صفحه
   Widget _buildTopStatusBar() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -268,9 +267,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white70),
               ),
               const SizedBox(width: 16),
-              const Icon(Icons.signal_cellular_alt, color: Colors.white54, size: 16),
+              const Icon(Icons.wb_sunny_rounded, color: Colors.amberAccent, size: 16),
               const SizedBox(width: 4),
-              const Text("LTE", style: TextStyle(color: Colors.white54, fontSize: 12)),
+              const Text("24°C تهران", style: TextStyle(color: Colors.white70, fontSize: 12)),
             ],
           ),
           Row(
@@ -294,7 +293,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // سایدبار عمودی سمت چپ
   Widget _buildVerticalSidebar() {
     return Container(
       width: 65,
@@ -303,19 +301,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           const SizedBox(height: 16),
           Icon(Icons.flash_on, color: _accentColor, size: 28),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
           _buildSidebarBtn(icon: Icons.dashboard_rounded, index: 0, label: "خانه", onTap: () => setState(() => _selectedSidebarIndex = 0)),
           _buildSidebarBtn(icon: Icons.explore_rounded, index: 1, label: "مسیریاب", onTap: _openMaps),
           _buildSidebarBtn(icon: Icons.music_note_rounded, index: 2, label: "موزیک", onTap: () => setState(() => _selectedSidebarIndex = 2)),
-          _buildSidebarBtn(icon: Icons.apps_rounded, index: 3, label: "برنامه‌ها", onTap: () => _openAndroidSettings('android.settings.SETTINGS')),
+          _buildSidebarBtn(icon: Icons.phone_in_talk_rounded, index: 3, label: "تماس", onTap: _openDialer),
+          _buildSidebarBtn(icon: Icons.apps_rounded, index: 4, label: "برنامه‌ها", onTap: () => _openAndroidSettings('android.settings.SETTINGS')),
 
           const Spacer(),
 
-          // دکمه تنظیمات رنگ و روشنایی اختصاصی لانچر
           IconButton(
             icon: const Icon(Icons.settings_suggest_rounded, color: Colors.white54, size: 26),
-            tooltip: "تنظیمات گرافیکی لانچر",
+            tooltip: "تنظیمات گرافیکی",
             onPressed: _showSettingsDialog,
           ),
           const SizedBox(height: 16),
@@ -327,25 +325,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildSidebarBtn({required IconData icon, required int index, required String label, VoidCallback? onTap}) {
     bool isSelected = _selectedSidebarIndex == index;
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
+      margin: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
         border: isSelected ? Border(left: BorderSide(color: _accentColor, width: 3.5)) : null,
       ),
       child: IconButton(
-        icon: Icon(icon, color: isSelected ? _accentColor : Colors.white54, size: 26),
+        icon: Icon(icon, color: isSelected ? _accentColor : Colors.white54, size: 24),
         onPressed: onTap,
       ),
     );
   }
 
-  // دیالوگ تنظیمات رنگ‌بندی و روشنایی
   void _showSettingsDialog() {
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
           backgroundColor: const Color(0xFF101728),
-          title: const Text("تنظیمات ظاهری لانچر تیبا ۲", style: TextStyle(color: Colors.white)),
+          title: const Text("تنظیمات ظاهری لانچر", style: TextStyle(color: Colors.white)),
           content: StatefulBuilder(
             builder: (context, setStateModal) {
               return Column(
@@ -406,7 +403,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // کارت ناوبری (شبیه عکس)
   Widget _buildNavigationCard() {
     return Container(
       padding: const EdgeInsets.all(14),
@@ -457,7 +453,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // سرعت‌سنج مرکز (دقیقاً مشابه عکس مرجع با دو حلقه رنگی نئونی)
   Widget _buildCenterSpeedHud() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -470,7 +465,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            // حلقه بیرونی نارنجی
             SizedBox(
               width: 210,
               height: 210,
@@ -481,7 +475,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 valueColor: AlwaysStoppedAnimation<Color>(_secondaryAccent),
               ),
             ),
-            // حلقه داخلی آبی نئونی
             SizedBox(
               width: 175,
               height: 175,
@@ -526,7 +519,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // مدیا پلیر (بالا سمت راست با قابلیت پخش پشت سر هم و پوزیشن ذخیره‌شده)
   Widget _buildMusicCard() {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -592,11 +584,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // عکس خودرو تیبا ۲ (پایین سمت راست دقیقاً جای مشخصات خودرو در عکس مرجع)
+  // عکس خودرو تیبا ۲ (کاملاً بزرگ، فیتِ کادر و پرکننده فضای پایین سمت راست)
   Widget _buildCarImageCard() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: const Color(0xFF0F172A),
         borderRadius: BorderRadius.circular(18),
@@ -605,15 +597,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("Car Status", style: TextStyle(color: Colors.white54, fontSize: 11)),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            child: Text("Tiba 2 Status", style: TextStyle(color: Colors.white54, fontSize: 11)),
+          ),
           Expanded(
             child: Center(
-              child: Image.asset(
-                'tiba2.png',
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) {
-                  return Icon(Icons.directions_car, size: 50, color: _accentColor);
-                },
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.asset(
+                  'tiba2.png',
+                  width: double.infinity,
+                  fit: BoxFit.cover, // کاملاً فیت و بزرگ در کادر
+                  errorBuilder: (context, error, stackTrace) {
+                    return Icon(Icons.directions_car, size: 60, color: _accentColor);
+                  },
+                ),
               ),
             ),
           ),
