@@ -1,22 +1,19 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // اجرای ناهمگام و غیرمسدودکننده برای جلوگیری از صفحه سفید اولیه
   runApp(const TibaLauncherApp());
   
-  // راه‌اندازی سرویس صوت در پس‌زمینه بدون فریز کردن UI اصلی
   Future.microtask(() async {
     try {
       await JustAudioBackground.init(
@@ -35,7 +32,7 @@ class TibaLauncherApp extends StatefulWidget {
 }
 
 class _TibaLauncherAppState extends State<TibaLauncherApp> {
-  Color _neon = const Color(0xFF7DD3FC);
+  Color _neon = const Color(0xFF00F0FF);
   double _offset = 0.0, _maxSpeed = 180;
   bool _use24h = true, _keepAwake = true;
 
@@ -49,7 +46,7 @@ class _TibaLauncherAppState extends State<TibaLauncherApp> {
     try {
       final p = await SharedPreferences.getInstance();
       setState(() {
-        _neon = Color(p.getInt('neon') ?? 0xFF7DD3FC);
+        _neon = Color(p.getInt('neon') ?? 0xFF00F0FF);
         _offset = p.getDouble('offset') ?? 0.0;
         _maxSpeed = p.getDouble('maxSpeed') ?? 180;
         _use24h = p.getBool('use24h') ?? true;
@@ -73,7 +70,7 @@ class _TibaLauncherAppState extends State<TibaLauncherApp> {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF07090D),
+        scaffoldBackgroundColor: const Color(0xFF05070B),
       ),
       home: Dashboard(
         neon: _neon,
@@ -127,8 +124,7 @@ class _DashboardState extends State<Dashboard> {
   @override
   void initState() {
     super.initState();
-    // تاخیر کوتاه برای اینکه مانیتور کاملاً وارد صفحه اصلی شود و لگی نداشته باشد
-    Future.delayed(const Duration(milliseconds: 500), () {
+    Future.delayed(const Duration(milliseconds: 300), () {
       if (mounted) {
         _startGps();
         _initAudio();
@@ -241,15 +237,102 @@ class _DashboardState extends State<Dashboard> {
     setState(() {});
   }
 
-  Future<void> _launch(String scheme, String web) async {
+  Future<void> _openApp(String packageName) async {
     try {
-      final u = Uri.parse(scheme);
-      if (await canLaunchUrl(u)) {
-        await launchUrl(u);
-      } else {
-        await launchUrl(Uri.parse(web), mode: LaunchMode.externalApplication);
-      }
+      const platform = MethodChannel('com.tiba.launcher/app');
+      await platform.invokeMethod('openApp', {'package': packageName});
     } catch (_) {}
+  }
+
+  // باز کردن لیست تمام اپلیکیشن‌های نصب شده
+  void _showAllAppsModal() async {
+    List<Map<dynamic, dynamic>> apps = [];
+    try {
+      const platform = MethodChannel('com.tiba.launcher/app');
+      final List result = await platform.invokeMethod('getInstalledApps');
+      apps = result.cast<Map<dynamic, dynamic>>();
+    } catch (_) {}
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF0B0F19),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.75,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) => Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+              ),
+              const SizedBox(height: 14),
+              Text('تمام نرم‌افزارهای دستگاه',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: widget.neon)),
+              const SizedBox(height: 16),
+              Expanded(
+                child: apps.isEmpty
+                    ? const Center(child: Text('هیچ برنامه‌ای یافت نشد یا در دسترس نیست'))
+                    : GridView.builder(
+                        controller: scrollController,
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 4,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                          childAspectRatio: 1.1,
+                        ),
+                        itemCount: apps.length,
+                        itemBuilder: (context, index) {
+                          final app = apps[index];
+                          final name = app['name'] ?? '';
+                          final pkg = app['package'] ?? '';
+                          return InkWell(
+                            onTap: () {
+                              Navigator.pop(ctx);
+                              _openApp(pkg);
+                            },
+                            borderRadius: BorderRadius.circular(14),
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.05),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: widget.neon.withOpacity(0.2)),
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.android, color: widget.neon, size: 32),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 11, color: Colors.white),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _showSettings() {
@@ -276,8 +359,8 @@ class _DashboardState extends State<Dashboard> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Color(0xFF7DD3FC),
                   const Color(0xFF00F0FF),
+                  const Color(0xFF7DD3FC),
                   const Color(0xFF39FF14),
                   const Color(0xFFFF0055),
                   const Color(0xFFFFB800),
@@ -345,12 +428,30 @@ class _DashboardState extends State<Dashboard> {
           padding: const EdgeInsets.all(12),
           child: Column(
             children: [
+              // هدر بالا (تنظیمات، دکمه نرم‌افزارها و ساعت)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  IconButton(
-                    icon: Icon(Icons.settings, color: c),
-                    onPressed: _showSettings,
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: Icon(Icons.settings, color: c, size: 26),
+                        onPressed: _showSettings,
+                      ),
+                      const SizedBox(width: 4),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: c.withOpacity(0.15),
+                          foregroundColor: Colors.white,
+                          side: BorderSide(color: c.withOpacity(0.5)),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.initRadius ?? BorderRadius.circular(10)),
+                        ),
+                        onPressed: _showAllAppsModal,
+                        icon: Icon(Icons.apps, color: c, size: 20),
+                        label: const Text('نرم‌افزارها', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
                   ),
                   StreamBuilder(
                     stream: Stream.periodic(const Duration(seconds: 1)),
@@ -360,15 +461,18 @@ class _DashboardState extends State<Dashboard> {
                         widget.use24h
                             ? "${n.hour.toString().padLeft(2, '0')}:${n.minute.toString().padLeft(2, '0')}"
                             : "${n.hour % 12 == 0 ? 12 : n.hour % 12}:${n.minute.toString().padLeft(2, '0')}",
-                        style: TextStyle(color: c, fontSize: 22, fontWeight: FontWeight.bold),
+                        style: TextStyle(color: c, fontSize: 26, fontWeight: FontWeight.bold, letterSpacing: 1.5),
                       );
                     },
                   ),
                 ],
               ),
+              const SizedBox(height: 6),
+              // بدنه اصلی سه ستونه
               Expanded(
                 child: Row(
                   children: [
+                    // ستون اول: مسیریابی و موزیک
                     Expanded(
                       flex: 4,
                       child: Column(
@@ -378,52 +482,53 @@ class _DashboardState extends State<Dashboard> {
                               c,
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Text('NAVIGATION', style: TextStyle(color: c, fontSize: 11, fontWeight: FontWeight.bold)),
-                                  const Spacer(),
+                                  const SizedBox(height: 8),
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                                     children: [
-                                      _navBtn('نشان', () => _launch('nshn://', 'https://neshan.org/maps'), c),
-                                      _navBtn('بلد', () => _launch('balad://', 'https://balad.ir'), c),
-                                      _navBtn('گوگل', () => _launch('google.navigation:q=', 'https://maps.google.com'), c),
+                                      _navBtn('نشان', () => _openApp('ir.neshan.taksi'), c),
+                                      _navBtn('بلد', () => _openApp('ir.map.balad'), c),
+                                      _navBtn('گوگل مپ', () => _openApp('com.google.android.apps.maps'), c),
                                     ],
                                   ),
-                                  const Spacer(),
                                 ],
                               ),
                             ),
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 8),
                           Expanded(
                             child: _card(
                               c,
                               Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
                                       Text('MUSIC', style: TextStyle(color: c, fontSize: 11, fontWeight: FontWeight.bold)),
-                                      TextButton(onPressed: _pick, child: Text('+ آهنگ‌ها', style: TextStyle(color: c, fontSize: 11))),
+                                      TextButton(onPressed: _pick, child: Text('+ انتخاب آهنگ', style: TextStyle(color: c, fontSize: 11))),
                                     ],
                                   ),
                                   Text(
-                                    _idx >= 0 && _idx < _playlist.length ? _playlist[_idx].split('/').last : 'بدون آهنگ',
+                                    _idx >= 0 && _idx < _playlist.length ? _playlist[_idx].split('/').last : 'موزیک در حال پخش...',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 12),
+                                    style: const TextStyle(fontSize: 12, color: Colors.white70),
                                   ),
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      IconButton(icon: const Icon(Icons.skip_previous), onPressed: _prev),
+                                      IconButton(icon: const Icon(Icons.skip_previous, size: 28), onPressed: _prev),
                                       IconButton(
-                                        icon: Icon(_player.playing ? Icons.pause_circle : Icons.play_circle),
+                                        icon: Icon(_player.playing ? Icons.pause_circle_filled : Icons.play_circle_filled),
                                         color: c,
-                                        iconSize: 36,
+                                        iconSize: 42,
                                         onPressed: _toggle,
                                       ),
-                                      IconButton(icon: const Icon(Icons.skip_next), onPressed: _next),
+                                      IconButton(icon: const Icon(Icons.skip_next, size: 28), onPressed: _next),
                                     ],
                                   ),
                                 ],
@@ -433,7 +538,8 @@ class _DashboardState extends State<Dashboard> {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
+                    // ستون دوم: سرعت‌سنج دیجیتال نئونی بزرگ
                     Expanded(
                       flex: 4,
                       child: Center(
@@ -445,15 +551,16 @@ class _DashboardState extends State<Dashboard> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Text('$_speed', style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold)),
-                                Text('KM/H', style: TextStyle(color: c, fontSize: 12, fontWeight: FontWeight.bold)),
+                                Text('$_speed', style: const TextStyle(fontSize: 52, fontWeight: FontWeight.bold, color: Colors.white)),
+                                Text('KM/H', style: TextStyle(color: c, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 2)),
                               ],
                             ),
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
+                    // ستون سوم: لوگو و اطلاعات خودرو
                     Expanded(
                       flex: 3,
                       child: _card(
@@ -461,11 +568,19 @@ class _DashboardState extends State<Dashboard> {
                         Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text('TIBA 2', style: TextStyle(color: c, fontSize: 18, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 10),
-                            Icon(Icons.directions_car, color: c, size: 70),
-                            const SizedBox(height: 10),
-                            const Text('سایپا تیبا ۲', style: TextStyle(fontSize: 12, color: Colors.white70)),
+                            Text('TIBA 2', style: TextStyle(color: c, fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 2)),
+                            const SizedBox(height: 12),
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: c.withOpacity(0.1),
+                                border: Border.all(color: c.withOpacity(0.4), width: 2),
+                              ),
+                              child: Icon(Icons.directions_car, color: c, size: 55),
+                            ),
+                            const SizedBox(height: 12),
+                            const Text('سایپا تیبا ۲', style: TextStyle(fontSize: 13, color: Colors.white70, fontWeight: FontWeight.w500)),
                           ],
                         ),
                       ),
@@ -483,11 +598,18 @@ class _DashboardState extends State<Dashboard> {
   Widget _card(Color c, Widget child) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: c.withOpacity(0.2)),
+        color: Colors.white.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: c.withOpacity(0.25), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: c.withOpacity(0.05),
+            blurRadius: 8,
+            spreadRadius: 1,
+          )
+        ],
       ),
       child: child,
     );
@@ -496,12 +618,14 @@ class _DashboardState extends State<Dashboard> {
   Widget _navBtn(String label, VoidCallback tap, Color c) {
     return ElevatedButton(
       style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.white.withOpacity(0.08),
+        backgroundColor: c.withOpacity(0.15),
         foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        side: BorderSide(color: c.withOpacity(0.5)),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
       onPressed: tap,
-      child: Text(label, style: const TextStyle(fontSize: 12)),
+      child: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
     );
   }
 }
@@ -515,11 +639,13 @@ class SpeedPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final r = size.width / 2 - 10;
+    final r = size.width / 2 - 12;
+    
     final bgPaint = Paint()
-      ..color = Colors.white12
+      ..color = Colors.white.withOpacity(0.07)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 8;
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = 10;
     canvas.drawArc(Rect.fromCircle(center: center, radius: r), -math.pi * 1.25, math.pi * 1.5, false, bgPaint);
 
     final sweep = (speed / max).clamp(0.0, 1.0) * math.pi * 1.5;
@@ -527,7 +653,7 @@ class SpeedPainter extends CustomPainter {
       ..color = color
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
-      ..strokeWidth = 8;
+      ..strokeWidth = 10;
     canvas.drawArc(Rect.fromCircle(center: center, radius: r), -math.pi * 1.25, sweep, false, progPaint);
   }
 
