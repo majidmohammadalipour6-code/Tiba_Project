@@ -37,6 +37,36 @@ jobs:
             python3 -c "import base64; open('tiba2.png','wb').write(base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='))"
           fi
 
+      - name: Upgrade Kotlin and CompileSdk in Android Files
+        run: |
+          python3 - <<'EOF'
+          import os, re
+
+          # ۱. ارتقای نسخه کاتلین در android/settings.gradle یا android/build.gradle
+          settings_gradle = 'android/settings.gradle'
+          if os.path.exists(settings_gradle):
+              content = open(settings_gradle, encoding='utf-8').read()
+              # اگر پلاگین کاتلین وجود دارد، به 2.0.21 آپدیت شود
+              content = re.sub(r'id "org\.jetbrains\.kotlin\.android" version "[^"]+"', 'id "org.jetbrains.kotlin.android" version "2.0.21"', content)
+              open(settings_gradle, 'w', encoding='utf-8').write(content)
+
+          build_gradle = 'android/build.gradle'
+          if os.path.exists(build_gradle):
+              content = open(build_gradle, encoding='utf-8').read()
+              content = re.sub(r'ext\.kotlin_version\s*=\s*[\'"][^\'"]+[\'"]', "ext.kotlin_version = '2.0.21'", content)
+              open(build_gradle, 'w', encoding='utf-8').write(content)
+
+          # ۲. تنظیم صریح compileSdk و minSdkVersion در android/app/build.gradle
+          app_gradle = 'android/app/build.gradle'
+          if os.path.exists(app_gradle):
+              content = open(app_gradle, encoding='utf-8').read()
+              content = re.sub(r'compileSdkVersion\s+.*', 'compileSdkVersion 35', content)
+              content = re.sub(r'compileSdk\s*=.*', 'compileSdk = 35', content)
+              content = re.sub(r'targetSdkVersion\s+.*', 'targetSdkVersion 35', content)
+              content = re.sub(r'minSdkVersion\s+.*', 'minSdkVersion 21', content)
+              open(app_gradle, 'w', encoding='utf-8').write(content)
+          EOF
+
       - name: Patch AndroidManifest
         run: |
           python3 - <<'EOF'
@@ -98,7 +128,7 @@ jobs:
       - name: Patch All Plugin Gradle Files in Pub Cache
         run: |
           python3 - <<'EOF'
-          import os, glob
+          import os
 
           cache_dir = os.path.expanduser('~/.pub-cache')
           for root, dirs, files in os.walk(cache_dir):
@@ -112,7 +142,6 @@ jobs:
                           changed = False
                           new_lines = []
                           for line in lines:
-                              # حذف یا جایگزینی هر کدی که به property ناشناخته flutter ارجاع می‌دهد
                               if 'flutter.compileSdkVersion' in line or 'flutter.targetSdkVersion' in line or 'flutter.minSdkVersion' in line:
                                   if 'compileSdkVersion' in line:
                                       new_lines.append('    compileSdkVersion 35\n')
@@ -130,7 +159,6 @@ jobs:
                           if changed:
                               with open(path, 'w', encoding='utf-8') as f:
                                   f.writelines(new_lines)
-                              print(f"Patched: {path}")
                       except Exception as e:
                           pass
           EOF
