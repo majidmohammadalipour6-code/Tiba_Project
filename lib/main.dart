@@ -173,18 +173,14 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
-  // GPS
   double _rawSpeed = 0.0;
   StreamSubscription<Position>? _positionStream;
 
-  // Music
   final AudioPlayer _player = AudioPlayer();
   final List<String> _playlist = [];
   int _currentIndex = -1;
 
-  // volume
   double _volume = 0.7;
-
   late AnimationController _equalizerController;
 
   @override
@@ -211,9 +207,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     super.dispose();
   }
 
-  /// وقتی اپ به پس‌زمینه می‌رود (یا لانچر جای دیگری باز می‌شود)
-  /// موزیک باید ادامه پیدا کند — پس اینجا هیچ توقف‌ی انجام نمی‌دهیم،
-  /// فقط وضعیت را ذخیره می‌کنیم تا در صورت کرش/بسته‌شدن از همان‌جا برگردد.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
@@ -255,12 +248,9 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   Future<void> _initAudio() async {
-    // پخش موزیک نباید توسط تماس/سایر اپ‌ها برای همیشه قطع شود؛
-    // بعد از پایان وقفه، از همان‌جا ادامه بده.
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.music());
 
-    // restore saved playlist
     final p = await SharedPreferences.getInstance();
     final saved = p.getStringList('playlist') ?? [];
     setState(() => _playlist.addAll(saved));
@@ -275,7 +265,6 @@ class _DashboardScreenState extends State<DashboardScreen>
       if (mounted) setState(() {});
     });
 
-    // اگر آهنگی قبلاً در حال پخش بوده، آماده‌اش کن (بدون پخش خودکار)
     final lastIndex = p.getInt('lastIndex') ?? -1;
     if (lastIndex >= 0 && lastIndex < _playlist.length) {
       setState(() => _currentIndex = lastIndex);
@@ -355,7 +344,6 @@ class _DashboardScreenState extends State<DashboardScreen>
         (_currentIndex - 1 + _playlist.length) % _playlist.length);
   }
 
-  /// دکمه‌ی play: اگر متوقف بوده، از همان ثانیه‌ی توقف ادامه می‌دهد.
   Future<void> _togglePlay() async {
     if (_playlist.isEmpty) {
       await _pickSongs();
@@ -369,7 +357,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       await _player.pause();
       _savePlaybackState();
     } else {
-      await _player.play(); // از همان‌جا که مانده ادامه می‌دهد
+      await _player.play();
     }
     if (mounted) setState(() {});
   }
@@ -393,8 +381,6 @@ class _DashboardScreenState extends State<DashboardScreen>
       await launchUrl(fallbackUri, mode: LaunchMode.externalApplication);
     }
   }
-
-  // ================= SETTINGS =================
 
   void _openSettingsDialog() {
     Color selectedColor = widget.primaryNeon;
@@ -581,8 +567,6 @@ class _DashboardScreenState extends State<DashboardScreen>
       ),
     );
   }
-
-  // ================= BUILD =================
 
   @override
   Widget build(BuildContext context) {
@@ -857,311 +841,4 @@ class _DashboardScreenState extends State<DashboardScreen>
       children: [
         Row(
           children: [
-            Icon(Icons.music_note, color: accent, size: 16),
-            const SizedBox(width: 6),
-            Text('CAR AUDIO',
-                style: TextStyle(
-                    color: accent,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.5)),
-            const SizedBox(width: 8),
-            _buildAnimatedEqualizer(),
-            const Spacer(),
-            GestureDetector(
-              onTap: _pickSongs,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: accent.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: accent.withOpacity(0.4)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.add, size: 14, color: accent),
-                    const SizedBox(width: 4),
-                    Text('آهنگ‌ها',
-                        style: TextStyle(fontSize: 11, color: accent)),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Text(
-          hasSongs
-              ? (_currentIndex >= 0 ? _songName(_currentIndex) : _songName(0))
-              : 'آهنگی انتخاب نشده — دکمه «آهنگ‌ها» را بزن',
-          style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: hasSongs ? Colors.white : Colors.white38),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            Text(_fmt(position),
-                style:
-                    const TextStyle(fontSize: 10, color: Colors.white54)),
-            Expanded(
-              child: SliderTheme(
-                data: SliderTheme.of(context).copyWith(
-                  trackHeight: 3,
-                  thumbShape:
-                      const RoundSliderThumbShape(enabledThumbRadius: 6),
-                  overlayShape:
-                      const RoundSliderOverlayShape(overlayRadius: 12),
-                ),
-                child: Slider(
-                  value: duration.inMilliseconds > 0
-                      ? position.inMilliseconds
-                          .clamp(0, duration.inMilliseconds)
-                          .toDouble()
-                      : 0,
-                  max: duration.inMilliseconds > 0
-                      ? duration.inMilliseconds.toDouble()
-                      : 1,
-                  activeColor: accent,
-                  inactiveColor: Colors.white.withOpacity(0.15),
-                  onChanged: duration.inMilliseconds > 0
-                      ? (v) => _player.seek(
-                          Duration(milliseconds: v.round()))
-                      : null,
-                ),
-              ),
-            ),
-            Text(_fmt(duration),
-                style:
-                    const TextStyle(fontSize: 10, color: Colors.white54)),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.skip_previous_rounded, size: 30),
-              color: Colors.white70,
-              onPressed: hasSongs ? _playPrev : null,
-            ),
-            GestureDetector(
-              onTap: _togglePlay,
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: accent,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: accent.withOpacity(0.6),
-                      blurRadius: 14,
-                    ),
-                  ],
-                ),
-                child: Icon(
-                  _player.playing ? Icons.pause : Icons.play_arrow_rounded,
-                  color: Colors.black,
-                  size: 30,
-                ),
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.skip_next_rounded, size: 30),
-              color: Colors.white70,
-              onPressed: hasSongs ? _playNext : null,
-            ),
-            const SizedBox(width: 8),
-            StreamBuilder<LoopMode>(
-              stream: _player.loopModeStream,
-              builder: (context, snap) {
-                final loop = snap.data ?? LoopMode.off;
-                return IconButton(
-                  icon: Icon(
-                    loop == LoopMode.one ? Icons.repeat_one : Icons.repeat,
-                    size: 22,
-                    color: loop == LoopMode.off ? Colors.white38 : accent,
-                  ),
-                  onPressed: () {
-                    _player.setLoopMode(
-                        loop == LoopMode.off ? LoopMode.one : LoopMode.off);
-                  },
-                );
-              },
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAnimatedEqualizer() {
-    return AnimatedBuilder(
-      animation: _equalizerController,
-      builder: (context, child) {
-        return Row(
-          children: List.generate(4, (index) {
-            double height = _player.playing
-                ? (5 + (9 * ((_equalizerController.value + index * 0.2) % 1)))
-                : 4;
-            return Container(
-              margin: const EdgeInsets.symmetric(horizontal: 1.5),
-              width: 3,
-              height: height,
-              decoration: BoxDecoration(
-                color: widget.primaryNeon,
-                borderRadius: BorderRadius.circular(4),
-              ),
-            );
-          }),
-        );
-      },
-    );
-  }
-
-  Widget _buildTibaCarCardContent(Color accent) {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Icon(Icons.directions_car, color: accent, size: 18),
-            const SizedBox(width: 8),
-            Text(
-              'CAR STATUS',
-              style: TextStyle(
-                color: accent,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-                letterSpacing: 2,
-              ),
-            ),
-          ],
-        ),
-        const Spacer(),
-        Text(
-          'TIBA 2',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 22,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 3,
-            shadows: [Shadow(color: accent.withOpacity(0.7), blurRadius: 14)],
-          ),
-        ),
-        const SizedBox(height: 4),
-        const Text(
-          'سواری شهری',
-          style: TextStyle(color: Colors.white54, fontSize: 12),
-        ),
-        const SizedBox(height: 12),
-        Expanded(
-          child: Center(
-            child: Image.asset(
-              'tiba2.png',
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) {
-                return Image.asset(
-                  'assets/tiba2.png',
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Icon(
-                      Icons.directions_car_filled_rounded,
-                      color: accent,
-                      size: 90,
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        ),
-        const Spacer(),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: accent.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: accent.withOpacity(0.4)),
-          ),
-          child: Text(
-            'GPS LIVE',
-            style: TextStyle(fontSize: 11, color: accent, letterSpacing: 1.5),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SpeedometerPainter extends CustomPainter {
-  final int speed;
-  final Color accent;
-  final double maxSpeed;
-  _SpeedometerPainter({
-    required this.speed,
-    required this.accent,
-    required this.maxSpeed,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = math.min(size.width, size.height) / 2 - 12;
-
-    final glow = Paint()
-      ..color = accent.withOpacity(0.12)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 12
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 26);
-    canvas.drawCircle(center, radius, glow);
-
-    final track = Paint()
-      ..color = Colors.white.withOpacity(0.08)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 9
-      ..strokeCap = StrokeCap.round;
-    canvas.drawArc(Rect.fromCircle(center: center, radius: radius),
-        -math.pi / 2, 2 * math.pi, false, track);
-
-    final sweep = 2 * math.pi * (speed / maxSpeed).clamp(0.0, 1.0);
-    final progress = Paint()
-      ..shader = SweepGradient(
-        startAngle: -math.pi / 2,
-        endAngle: 3 * math.pi / 2,
-        colors: [accent, accent.withOpacity(0.55)],
-      ).createShader(Rect.fromCircle(center: center, radius: radius))
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 9
-      ..strokeCap = StrokeCap.round;
-    canvas.drawArc(Rect.fromCircle(center: center, radius: radius),
-        -math.pi / 2, sweep, false, progress);
-
-    final inner = Paint()
-      ..color = accent.withOpacity(0.15)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    canvas.drawCircle(center, radius - 24, inner);
-
-    final tick = Paint()
-      ..color = Colors.white.withOpacity(0.25)
-      ..strokeWidth = 2;
-    for (var i = 0; i < 24; i++) {
-      final a = -math.pi / 2 + (2 * math.pi * i / 24);
-      final p1 = Offset(center.dx + math.cos(a) * (radius - 20),
-          center.dy + math.sin(a) * (radius - 20));
-      final p2 = Offset(center.dx + math.cos(a) * (radius - 14),
-          center.dy + math.sin(a) * (radius - 14));
-      canvas.drawLine(p1, p2, tick);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_SpeedometerPainter old) =>
-      old.speed != speed ||
-      old.accent != accent ||
-      old.maxSpeed != maxSpeed;
-}
+            Icon
