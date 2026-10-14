@@ -25,29 +25,11 @@ jobs:
           flutter-version: '3.24.0'
           channel: 'stable'
 
-      - name: Prepare Clean Android Project and Assets
-        run: |
-          # تولید ساختار بدون نقص و استاندارد اندروید
-          flutter create --org com.tiba.launcher --project-name tiba_project temp_app
-          rm -rf android
-          cp -r temp_app/android ./
-          rm -rf temp_app
-          
-          # آماده‌سازی پوشه assets و انتقال عکس تیبا ۲
-          mkdir -p assets
-          if [ -f "tiba2.png" ]; then
-            cp tiba2.png assets/tiba2.png
-          elif [ -f "tiba2.jpg" ]; then
-            cp tiba2.jpg assets/tiba2.png
-          elif [ -f "tiba2.webp" ]; then
-            cp tiba2.webp assets/tiba2.png
-          fi
-
       - name: Get dependencies
         run: flutter pub get
 
       - name: Build APK
-        run: flutter build apk --release
+        run: flutter build apk --split-per-abi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
