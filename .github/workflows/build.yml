@@ -122,9 +122,9 @@ jobs:
         run: |
           flutter pub get
 
-      - name: Analyze Dart Code (Show Exact Code Errors)
+      - name: Check Dart Errors
         run: |
-          flutter analyze --no-fatal-warnings || true
+          flutter analyze lib/main.dart
 
       - name: Overwrite Fragile Plugins
         run: |
@@ -173,7 +173,7 @@ jobs:
 
       - name: Build Launcher APK
         run: |
-          flutter build apk --release --verbose
+          flutter build apk --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
