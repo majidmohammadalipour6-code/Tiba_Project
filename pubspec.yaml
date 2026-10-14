@@ -1,21 +1,23 @@
 name: tiba_project
-description: "Tiba 2 Car Android Launcher"
-publish_to: 'none'
+description: "Tiba 2 Custom Car Launcher"
+publish_to: "none"
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.4.0 <4.0.0'
+  sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
   geolocator: ^13.0.2
-  just_audio: ^0.9.42
-  audio_session: ^0.1.21
-  just_audio_background: ^0.0.1-beta.12
-  file_picker: ^8.1.4
-  shared_preferences: ^2.3.2
+  just_audio: ^0.9.40
+  file_picker: ^8.1.2
   wakelock_plus: ^1.2.8
+  android_intent_plus: ^5.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
 
 flutter:
   uses-material-design: true
