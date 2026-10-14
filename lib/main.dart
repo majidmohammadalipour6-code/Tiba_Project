@@ -860,15 +860,4 @@ class _DashboardScreenState extends State<DashboardScreen>
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.5)),
-            const SizedBox(width: 8),
-            _buildAnimatedEqualizer(),
-            const Spacer(),
-            GestureDetector(
-              onTap: _pickSongs,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: accent.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: accent.withOpaci
+            const SizedBox(width:
