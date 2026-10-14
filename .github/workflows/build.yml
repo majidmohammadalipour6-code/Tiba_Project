@@ -10,12 +10,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
+          distribution: 'temurin'
           java-version: '17'
 
       - name: Set up Flutter
@@ -24,11 +25,23 @@ jobs:
           flutter-version: '3.24.0'
           channel: 'stable'
 
-      - name: Setup project structure and assets
+      - name: Setup project structure and move car image
         run: |
+          # ساخت ساختار تمیز و سازگار اندروید برای رفع خطای گریدل
+          flutter create --org com.tiba.launcher --project-name tiba_project temp_project
+          rm -rf android
+          cp -r temp_project/android ./
+          rm -rf temp_project
+          
+          # ساخت پوشه assets و انتقال عکس آپلود شده تیبا ۲ به آن
           mkdir -p assets
-          # دانلود خودکار تصویر باکیفیت تیبا ۲ به عنوان tiba2.png
-          curl -s -L -o assets/tiba2.png https://images2.imgbox.com/6c/0e/1sD8qNfJ_o.png
+          if [ -f "tiba2.png" ]; then
+            cp tiba2.png assets/tiba2.png
+          elif [ -f "tiba2.jpg" ]; then
+            cp tiba2.jpg assets/tiba2.png
+          elif [ -f "tiba2.webp" ]; then
+            cp tiba2.webp assets/tiba2.png
+          fi
 
       - name: Get dependencies
         run: flutter pub get
