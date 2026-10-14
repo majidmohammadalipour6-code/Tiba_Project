@@ -70,7 +70,7 @@ class _TibaLauncherAppState extends State<TibaLauncherApp> {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF05070B),
+        scaffoldBackgroundColor: const Color(0xFF060913),
       ),
       home: Dashboard(
         neon: _neon,
@@ -244,7 +244,6 @@ class _DashboardState extends State<Dashboard> {
     } catch (_) {}
   }
 
-  // باز کردن لیست تمام اپلیکیشن‌های نصب شده
   void _showAllAppsModal() async {
     List<Map<dynamic, dynamic>> apps = [];
     try {
@@ -282,7 +281,7 @@ class _DashboardState extends State<Dashboard> {
               const SizedBox(height: 16),
               Expanded(
                 child: apps.isEmpty
-                    ? const Center(child: Text('هیچ برنامه‌ای یافت نشد یا در دسترس نیست'))
+                    ? const Center(child: Text('هیچ برنامه‌ای یافت نشد'))
                     : GridView.builder(
                         controller: scrollController,
                         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -307,12 +306,12 @@ class _DashboardState extends State<Dashboard> {
                               decoration: BoxDecoration(
                                 color: Colors.white.withOpacity(0.05),
                                 borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: widget.neon.withOpacity(0.2)),
+                                border: Border.all(color: widget.neon.withOpacity(0.25)),
                               ),
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.android, color: widget.neon, size: 32),
+                                  Icon(Icons.android, color: widget.neon, size: 30),
                                   const SizedBox(height: 6),
                                   Text(
                                     name,
@@ -355,7 +354,7 @@ class _DashboardState extends State<Dashboard> {
             children: [
               const Text('تنظیمات لانچر تیبا ۲',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -410,7 +409,7 @@ class _DashboardState extends State<Dashboard> {
                   widget.onSave(col, off, maxS, u24, ka);
                   Navigator.pop(ctx);
                 },
-                child: const Text('ذخیره'),
+                child: const Text('ذخیره و اعمال', style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -428,7 +427,7 @@ class _DashboardState extends State<Dashboard> {
           padding: const EdgeInsets.all(12),
           child: Column(
             children: [
-              // هدر بالا (تنظیمات، دکمه نرم‌افزارها و ساعت)
+              // نوار بالایی: دکمه تنظیمات، دکمه نرم‌افزارها و ساعت دیجیتال نئونی
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -438,14 +437,14 @@ class _DashboardState extends State<Dashboard> {
                         icon: Icon(Icons.settings, color: c, size: 26),
                         onPressed: _showSettings,
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 6),
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: c.withOpacity(0.15),
+                          backgroundColor: c.withOpacity(0.12),
                           foregroundColor: Colors.white,
-                          side: BorderSide(color: c.withOpacity(0.5)),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.initRadius ?? BorderRadius.circular(10)),
+                          side: BorderSide(color: c.withOpacity(0.4)),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
                         onPressed: _showAllAppsModal,
                         icon: Icon(Icons.apps, color: c, size: 20),
@@ -467,8 +466,8 @@ class _DashboardState extends State<Dashboard> {
                   ),
                 ],
               ),
-              const SizedBox(height: 6),
-              // بدنه اصلی سه ستونه
+              const SizedBox(height: 8),
+              // بدنه اصلی سه ستونه خودرویی
               Expanded(
                 child: Row(
                   children: [
@@ -484,7 +483,13 @@ class _DashboardState extends State<Dashboard> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Text('NAVIGATION', style: TextStyle(color: c, fontSize: 11, fontWeight: FontWeight.bold)),
+                                  Row(
+                                    children: [
+                                      Icon(Icons.navigation, color: c, size: 14),
+                                      const SizedBox(width: 4),
+                                      Text('NAVIGATION', style: TextStyle(color: c, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                                    ],
+                                  ),
                                   const SizedBox(height: 8),
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -508,8 +513,18 @@ class _DashboardState extends State<Dashboard> {
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      Text('MUSIC', style: TextStyle(color: c, fontSize: 11, fontWeight: FontWeight.bold)),
-                                      TextButton(onPressed: _pick, child: Text('+ انتخاب آهنگ', style: TextStyle(color: c, fontSize: 11))),
+                                      Row(
+                                        children: [
+                                          Icon(Icons.music_note, color: c, size: 14),
+                                          const SizedBox(width: 4),
+                                          Text('MUSIC', style: TextStyle(color: c, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                                        ],
+                                      ),
+                                      TextButton(
+                                        onPressed: _pick,
+                                        style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(50, 30)),
+                                        child: Text('+ انتخاب آهنگ', style: TextStyle(color: c, fontSize: 11)),
+                                      ),
                                     ],
                                   ),
                                   Text(
@@ -521,14 +536,14 @@ class _DashboardState extends State<Dashboard> {
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      IconButton(icon: const Icon(Icons.skip_previous, size: 28), onPressed: _prev),
+                                      IconButton(icon: const Icon(Icons.skip_previous, size: 26), onPressed: _prev),
                                       IconButton(
                                         icon: Icon(_player.playing ? Icons.pause_circle_filled : Icons.play_circle_filled),
                                         color: c,
-                                        iconSize: 42,
+                                        iconSize: 40,
                                         onPressed: _toggle,
                                       ),
-                                      IconButton(icon: const Icon(Icons.skip_next, size: 28), onPressed: _next),
+                                      IconButton(icon: const Icon(Icons.skip_next, size: 26), onPressed: _next),
                                     ],
                                   ),
                                 ],
@@ -539,7 +554,7 @@ class _DashboardState extends State<Dashboard> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    // ستون دوم: سرعت‌سنج دیجیتال نئونی بزرگ
+                    // ستون دوم: سرعت‌سنج دیجیتال نئونی دایره‌ای
                     Expanded(
                       flex: 4,
                       child: Center(
@@ -560,7 +575,7 @@ class _DashboardState extends State<Dashboard> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    // ستون سوم: لوگو و اطلاعات خودرو
+                    // ستون سوم: لوگو و معرفی خودرو تیبا ۲
                     Expanded(
                       flex: 3,
                       child: _card(
@@ -576,11 +591,12 @@ class _DashboardState extends State<Dashboard> {
                                 shape: BoxShape.circle,
                                 color: c.withOpacity(0.1),
                                 border: Border.all(color: c.withOpacity(0.4), width: 2),
+                                boxShadow: [BoxShadow(color: c.withOpacity(0.2), blurRadius: 10, spreadRadius: 2)],
                               ),
-                              child: Icon(Icons.directions_car, color: c, size: 55),
+                              child: Icon(Icons.directions_car, color: c, size: 52),
                             ),
                             const SizedBox(height: 12),
-                            const Text('سایپا تیبا ۲', style: TextStyle(fontSize: 13, color: Colors.white70, fontWeight: FontWeight.w500)),
+                            const Text('سایپا تیبا ۲', style: TextStyle(fontSize: 13, color: Colors.white70, fontWeight: FontWeight.w600)),
                           ],
                         ),
                       ),
@@ -602,10 +618,10 @@ class _DashboardState extends State<Dashboard> {
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.04),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.withOpacity(0.25), width: 1.5),
+        border: Border.all(color: c.withOpacity(0.3), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: c.withOpacity(0.05),
+            color: c.withOpacity(0.04),
             blurRadius: 8,
             spreadRadius: 1,
           )
@@ -621,7 +637,7 @@ class _DashboardState extends State<Dashboard> {
         backgroundColor: c.withOpacity(0.15),
         foregroundColor: Colors.white,
         side: BorderSide(color: c.withOpacity(0.5)),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
       onPressed: tap,
