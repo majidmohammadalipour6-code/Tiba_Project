@@ -37,35 +37,28 @@ jobs:
             python3 -c "import base64; open('tiba2.png','wb').write(base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='))"
           fi
 
-      - name: Patch Gradle for Legacy Plugins
+      - name: Patch Gradle for Flutter Properties
         run: |
           python3 - <<'EOF'
-          # اصلاح فایل settings.gradle برای رفع خطای flutter property در پلاگین‌های قدیمی
-          path = 'android/settings.gradle'
+          # رفع قطعی مشکل missing flutter extension برای تمام ساب‌پروژه‌ها
+          path = 'android/build.gradle'
           with open(path, 'r', encoding='utf-8') as f:
               content = f.read()
 
-          # اگر پلاگینی دنبال flutter در ساختار اندروید گشت، به صورت جهانی تزریق می‌کنیم
-          root_gradle = 'android/build.gradle'
-          with open(root_gradle, 'r', encoding='utf-8') as f:
-              bg = f.read()
+          # اگر کدهای بعد از ارزیابی قبلی مانده باشد پاکسازی می‌کنیم
+          if "Cannot run Project.afterEvaluate" in content or "afterEvaluate" in content:
+              content = content.split("allprojects {")[0]
 
-          fix_block = """
-          allprojects {
-              afterEvaluate { project ->
-                  if (project.plugins.hasPlugin("com.android.application") ||
-                      project.plugins.hasPlugin("com.android.library")) {
-                      project.android {
-                          compileSdkVersion 34
-                          buildToolsVersion "34.0.0"
-                      }
-                  }
-              }
+          injection = """
+          subprojects {
+              project.evaluationDependsOn(':app')
           }
           """
-          if 'compileSdkVersion 34' not in bg:
-              with open(root_gradle, 'a', encoding='utf-8') as f:
-                  f.write(fix_block)
+          if 'evaluationDependsOn' not in content:
+              content += "\n" + injection
+
+          with open(path, 'w', encoding='utf-8') as f:
+              f.write(content)
           EOF
 
       - name: Patch AndroidManifest
@@ -115,6 +108,12 @@ jobs:
 
           open(path, 'w', encoding='utf-8').write(s)
           EOF
+
+      - name: Set SDK Versions
+        run: |
+          echo "flutter.minSdkVersion=21" >> android/local.properties
+          echo "flutter.targetSdkVersion=34" >> android/local.properties
+          echo "flutter.compileSdkVersion=34" >> android/local.properties
 
       - name: Build Launcher APK
         run: |
