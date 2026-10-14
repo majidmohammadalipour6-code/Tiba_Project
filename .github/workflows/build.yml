@@ -122,54 +122,50 @@ jobs:
         run: |
           flutter pub get
 
-      - name: Check Dart Errors
+      - name: Universal Auto-Patch All Pub Cache Gradle Files
         run: |
-          flutter analyze lib/main.dart
+          python3 - <<'EOF'
+          import os, glob, re
 
-      - name: Overwrite Fragile Plugins
-        run: |
-          find /home/runner/.pub-cache -name "build.gradle" | grep "geolocator_android" | while read file; do
-            cat << 'GRADLE_EOF' > "$file"
-          group 'com.baseflow.geolocator'
-          version '1.0-SNAPSHOT'
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.1.0' }
-          }
-          apply plugin: 'com.android.library'
-          android {
-              namespace "com.baseflow.geolocator"
-              compileSdkVersion 35
-              defaultConfig { minSdkVersion 21 }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_1_8
-                  targetCompatibility JavaVersion.VERSION_1_8
-              }
-          }
-          dependencies {
-              implementation 'com.google.android.gms:play-services-location:21.2.0'
-              implementation 'androidx.annotation:annotation:1.7.1'
-              implementation 'androidx.core:core:1.13.1'
-          }
-          GRADLE_EOF
-          done
+          cache_dir = os.path.expanduser('~/.pub-cache/hosted/pub.dev')
+          gradle_files = glob.glob(f'{cache_dir}/**/android/build.gradle', recursive=True)
 
-          find /home/runner/.pub-cache -name "build.gradle" | grep "package_info_plus" | while read file; do
-            cat << 'GRADLE_EOF' > "$file"
-          group 'dev.fluttercommunity.plus.packageinfo'
-          version '1.0-SNAPSHOT'
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.1.0' }
-          }
-          apply plugin: 'com.android.library'
-          android {
-              namespace "dev.fluttercommunity.plus.packageinfo"
-              compileSdkVersion 35
-              defaultConfig { minSdkVersion 21 }
-          }
-          GRADLE_EOF
-          done
+          for g_file in gradle_files:
+              try:
+                  with open(g_file, 'r', encoding='utf-8') as f:
+                      content = f.read()
+
+                  modified = False
+
+                  # اصلاح مشکل ارجاع به ویژگی‌های ناموجود flutter.compileSdkVersion
+                  if 'flutter.compileSdkVersion' in content or "flutter['compileSdkVersion']" in content:
+                      content = re.sub(r'compileSdkVersion\s+flutter\.compileSdkVersion', 'compileSdkVersion 35', content)
+                      content = re.sub(r'compileSdkVersion\s+flutter\[[\'"]compileSdkVersion[\'"]\]', 'compileSdkVersion 35', content)
+                      modified = True
+
+                  if 'flutter.minSdkVersion' in content or "flutter['minSdkVersion']" in content:
+                      content = re.sub(r'minSdkVersion\s+flutter\.minSdkVersion', 'minSdkVersion 21', content)
+                      content = re.sub(r'minSdkVersion\s+flutter\[[\'"]minSdkVersion[\'"]\]', 'minSdkVersion 21', content)
+                      modified = True
+
+                  if 'flutter.targetSdkVersion' in content or "flutter['targetSdkVersion']" in content:
+                      content = re.sub(r'targetSdkVersion\s+flutter\.targetSdkVersion', 'targetSdkVersion 35', content)
+                      content = re.sub(r'targetSdkVersion\s+flutter\[[\'"]targetSdkVersion[\'"]\]', 'targetSdkVersion 35', content)
+                      modified = True
+
+                  # رفع ارور wakelock_plus و پلاگین‌های مشابه
+                  if 'android.flutter' in content or "extension 'android' of type" in content or 'wakelock_plus' in g_file:
+                      content = re.sub(r'android\s*\{', 'android {\n    compileSdkVersion 35', content, count=1)
+                      content = re.sub(r'defaultConfig\s*\{', 'defaultConfig {\n        minSdkVersion 21\n        targetSdkVersion 35', content, count=1)
+                      modified = True
+
+                  if modified:
+                      with open(g_file, 'w', encoding='utf-8') as f:
+                          f.write(content)
+                      print(f"Patched: {g_file}")
+              except Exception as e:
+                  print(f"Error patching {g_file}: {e}")
+          EOF
 
       - name: Build Launcher APK
         run: |
