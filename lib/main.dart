@@ -110,31 +110,23 @@ class Dashboard extends StatefulWidget {
 }
 
 class _DashboardState extends State<Dashboard> {
-  double _rawSpeed = 0.0, _volume = 0.7;
+  double _rawSpeed = 0.0;
   StreamSubscription<Position>? _gpsSub;
   final AudioPlayer _player = AudioPlayer();
   final List<String> _playlist = [];
   int _idx = -1;
-  final VolumeController _vc = VolumeController();
 
   @override
   void initState() {
     super.initState();
     _startGps();
     _initAudio();
-    _vc.addListener((v) {
-      if (mounted) setState(() => _volume = v);
-    });
-    _vc.getVolume().then((v) {
-      if (mounted) setState(() => _volume = v);
-    }).catchError((_) {});
   }
 
   @override
   void dispose() {
     _gpsSub?.cancel();
     _player.dispose();
-    _vc.removeListener();
     super.dispose();
   }
 
@@ -158,8 +150,11 @@ class _DashboardState extends State<Dashboard> {
   }
 
   Future<void> _initAudio() async {
-    final s = AudioSession.instance;
-    await (await s).configure(const AudioSessionConfiguration.music());
+    try {
+      final s = AudioSession.instance;
+      await (await s).configure(const AudioSessionConfiguration.music());
+    } catch (_) {}
+    
     final sp = await SharedPreferences.getInstance();
     setState(() => _playlist.addAll(sp.getStringList('playlist') ?? []));
 
