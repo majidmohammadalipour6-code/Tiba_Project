@@ -1,8 +1,8 @@
-name: Build Tiba Project APK
+name: Build Tiba Launcher
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
@@ -10,8 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -22,55 +21,23 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.6'
+          flutter-version: '3.24.0'
           channel: 'stable'
-          cache: true
 
-      - name: Recreate Project Structure
+      - name: Setup project structure and assets
         run: |
-          mkdir -p /tmp/backup
-          if [ -d "lib" ]; then cp -r lib /tmp/backup/; fi
+          mkdir -p assets
+          # دانلود خودکار تصویر باکیفیت تیبا ۲ به عنوان tiba2.png
+          curl -s -L -o assets/tiba2.png https://images2.imgbox.com/6c/0e/1sD8qNfJ_o.png
 
-          find . -maxdepth 1 ! -name '.github' ! -name '.' -exec rm -rf {} +
-
-          flutter create . --org com.tiba.project --project-name tiba_project --platforms android
-
-          if [ -d "/tmp/backup/lib" ]; then cp -r /tmp/backup/lib/* lib/; fi
-
-          cat << 'EOF' > pubspec.yaml
-          name: tiba_project
-          description: "Tiba 2 Cockpit HUD Launcher"
-          publish_to: 'none'
-          version: 1.0.0+1
-
-          environment:
-            sdk: '>=3.0.0 <4.0.0'
-
-          dependencies:
-            flutter:
-              sdk: flutter
-            geolocator: ^11.0.0
-            url_launcher: ^6.2.5
-
-          flutter:
-            uses-material-design: true
-          EOF
-
-          if [ -f "android/build.gradle" ]; then
-            sed -i 's/ext.kotlin_version = .*/ext.kotlin_version = "1.9.22"/' android/build.gradle
-          fi
-          if [ -f "android/settings.gradle" ]; then
-            sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.22"/' android/settings.gradle
-          fi
-
-      - name: Install Dependencies
+      - name: Get dependencies
         run: flutter pub get
 
-      - name: Build Split Release APKs
-        run: flutter build apk --release --split-per-abi --no-tree-shake-icons
+      - name: Build APK
+        run: flutter build apk --split-per-abi
 
-      - name: Upload APK Artifacts
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Tiba-Dashboard-APKs
+          name: tiba-launcher-release
           path: build/app/outputs/flutter-apk/*.apk
