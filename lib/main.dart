@@ -16,8 +16,7 @@ class TibaLauncherApp extends StatefulWidget {
 
 class _TibaLauncherAppState extends State<TibaLauncherApp> {
   Color _primaryNeon = const Color(0xFF00F0FF);
-  double _glowIntensity = 0.85; // شدت نور و شفافیت
-  bool _showCarImage = true;
+  double _glowIntensity = 0.85;
 
   @override
   Widget build(BuildContext context) {
@@ -25,17 +24,15 @@ class _TibaLauncherAppState extends State<TibaLauncherApp> {
       title: 'Tiba 2 Cockpit HUD',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF06090F),
+        scaffoldBackgroundColor: const Color(0xFF060911),
       ),
       home: DashboardScreen(
         primaryNeon: _primaryNeon,
         glowIntensity: _glowIntensity,
-        showCarImage: _showCarImage,
-        onThemeChanged: (color, intensity, showCar) {
+        onThemeChanged: (color, intensity) {
           setState(() {
             _primaryNeon = color;
             _glowIntensity = intensity;
-            _showCarImage = showCar;
           });
         },
       ),
@@ -46,14 +43,12 @@ class _TibaLauncherAppState extends State<TibaLauncherApp> {
 class DashboardScreen extends StatefulWidget {
   final Color primaryNeon;
   final double glowIntensity;
-  final bool showCarImage;
-  final Function(Color, double, bool) onThemeChanged;
+  final Function(Color, double) onThemeChanged;
 
   const DashboardScreen({
     super.key,
     required this.primaryNeon,
     required this.glowIntensity,
-    required this.showCarImage,
     required this.onThemeChanged,
   });
 
@@ -66,15 +61,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   StreamSubscription<Position>? _positionStream;
   late Color _currentColor;
   late double _currentIntensity;
-  late bool _currentShowCar;
 
   final List<Color> _presetColors = [
-    const Color(0xFF00F0FF), // سایبر فیروزه‌ای
+    const Color(0xFF00F0FF), // فیروزه‌ای
     const Color(0xFFFF0055), // قرمز اسپرت
     const Color(0xFF00FF66), // سبز نئون
-    const Color(0xFFFFB703), // نارنجی مسابقه‌ای
-    const Color(0xFF9D4EDD), // بنفش سایبر
-    const Color(0xFFFFFFFF), // سفید یخی
+    const Color(0xFFFFB703), // طلایی نارنجی
+    const Color(0xFFA855F7), // بنفش نئون
+    const Color(0xFFE2E8F0), // سفید یخی
   ];
 
   @override
@@ -82,7 +76,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _currentColor = widget.primaryNeon;
     _currentIntensity = widget.glowIntensity;
-    _currentShowCar = widget.showCarImage;
     _initGps();
   }
 
@@ -129,15 +122,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _openSettingsDialog() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF0E131F),
+      backgroundColor: const Color(0xFF0C111D),
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            return Container(
+            return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -147,10 +140,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'شخصی‌سازی HUD تیبا ۲',
+                        'تنظیمات رنگ و نور داشبورد تیبا ۲',
                         style: TextStyle(
                           color: _currentColor,
-                          fontSize: 18,
+                          fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -161,25 +154,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ],
                   ),
                   const Divider(color: Colors.white12),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
 
-                  // انتخاب رنگ
-                  const Text('پالت رنگ نئون داشبورد:', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                  const Text('انتخاب رنگ نئون:', style: TextStyle(color: Colors.white70, fontSize: 13)),
                   const SizedBox(height: 12),
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: _presetColors.map((color) {
                       bool isSelected = _currentColor.value == color.value;
                       return GestureDetector(
                         onTap: () {
                           setModalState(() => _currentColor = color);
                           setState(() => _currentColor = color);
-                          widget.onThemeChanged(_currentColor, _currentIntensity, _currentShowCar);
+                          widget.onThemeChanged(_currentColor, _currentIntensity);
                         },
                         child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 250),
-                          width: 38,
-                          height: 38,
+                          duration: const Duration(milliseconds: 200),
+                          width: 40,
+                          height: 40,
                           decoration: BoxDecoration(
                             color: color,
                             shape: BoxShape.circle,
@@ -189,7 +181,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: color.withOpacity(isSelected ? 0.8 : 0.2),
+                                color: color.withOpacity(isSelected ? 0.9 : 0.2),
                                 blurRadius: isSelected ? 14 : 4,
                               )
                             ],
@@ -198,11 +190,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       );
                     }).toList(),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
 
-                  // اسلایدر شدت نور و روشنایی
                   Text(
-                    'شدت و پررنگی نور نئون (${(_currentIntensity * 100).toInt()}%):',
+                    'کمرنگ و پررنگ شدن نور (${(_currentIntensity * 100).toInt()}%):',
                     style: const TextStyle(color: Colors.white70, fontSize: 13),
                   ),
                   Slider(
@@ -214,23 +205,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     onChanged: (val) {
                       setModalState(() => _currentIntensity = val);
                       setState(() => _currentIntensity = val);
-                      widget.onThemeChanged(_currentColor, _currentIntensity, _currentShowCar);
+                      widget.onThemeChanged(_currentColor, _currentIntensity);
                     },
                   ),
-
-                  // کلید نمایش تصویر ماشین تیبا
-                  SwitchListTile(
-                    title: const Text('نمایش تصویر سه بعدی تیبا ۲', style: TextStyle(fontSize: 14)),
-                    activeColor: _currentColor,
-                    contentPadding: EdgeInsets.zero,
-                    value: _currentShowCar,
-                    onChanged: (val) {
-                      setModalState(() => _currentShowCar = val);
-                      setState(() => _currentShowCar = val);
-                      widget.onThemeChanged(_currentColor, _currentIntensity, _currentShowCar);
-                    },
-                  ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                 ],
               ),
             );
@@ -253,33 +231,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // تصویر پس‌زمینه ماشین تیبا ۲
-          if (_currentShowCar)
-            Positioned.fill(
-              child: Opacity(
-                opacity: 0.28 * _currentIntensity,
-                child: Image.asset(
-                  'assets/tiba.png',
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    decoration: BoxDecoration(
-                      gradient: RadialGradient(
-                        colors: [glow.withOpacity(0.15), Colors.transparent],
-                        radius: 0.9,
-                      ),
-                    ),
-                  ),
+          // طرح وکتوری نئونی ماشین در مرکز پس‌زمینه
+          Positioned.fill(
+            child: Opacity(
+              opacity: 0.18 * _currentIntensity,
+              child: Center(
+                child: Icon(
+                  Icons.directions_car_filled_outlined,
+                  size: 340,
+                  color: glow,
                 ),
               ),
             ),
+          ),
 
-          // خطوط نئونی بالا و پایین شبیه کابین سایبرپانک
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 10.0),
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
               child: Column(
                 children: [
-                  // نوار بالای صفحه
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -288,26 +258,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Icon(Icons.directions_car, color: glow, size: 22),
                           const SizedBox(width: 8),
                           Text(
-                            'TIBA 2 CYBER COCKPIT',
+                            'TIBA 2 HUD DASHBOARD',
                             style: TextStyle(
                               color: glow,
                               fontSize: 15,
                               fontWeight: FontWeight.w900,
-                              letterSpacing: 2.2,
-                              shadows: [Shadow(color: glow, blurRadius: 16)],
+                              letterSpacing: 2,
+                              shadows: [Shadow(color: glow, blurRadius: 15)],
                             ),
                           ),
                         ],
                       ),
                       IconButton(
-                        icon: Icon(Icons.tune_rounded, color: glow, size: 26),
+                        icon: Icon(Icons.palette_outlined, color: glow, size: 26),
                         onPressed: _openSettingsDialog,
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
 
-                  // بدنه اصلی ۳ بخشی لانچر
                   Expanded(
                     child: Row(
                       children: [
@@ -323,18 +292,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   Column(
                                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                                     children: [
-                                      Text(
-                                        'مسیریابی هوشمند',
-                                        style: TextStyle(color: glow, fontSize: 13, fontWeight: FontWeight.bold),
-                                      ),
-                                      _appTile('نشان', const Color(0xFFEE4036), () => _openApp('nshn://', 'https://nshn.ir')),
-                                      _appTile('بلد', const Color(0xFF00C853), () => _openApp('balad://', 'https://balad.ir')),
-                                      _appTile('گوگل مپ', const Color(0xFF2979FF), () => _openApp('google.navigation:q=', 'https://maps.google.com')),
+                                      Text('مسیریابی', style: TextStyle(color: glow, fontSize: 13, fontWeight: FontWeight.bold)),
+                                      _appBtn('نشان', const Color(0xFFEE4036), () => _openApp('nshn://', 'https://nshn.ir')),
+                                      _appBtn('بلد', const Color(0xFF00C853), () => _openApp('balad://', 'https://balad.ir')),
+                                      _appBtn('گوگل مپ', const Color(0xFF2979FF), () => _openApp('google.navigation:q=', 'https://maps.google.com')),
                                     ],
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 10),
                               Expanded(
                                 flex: 4,
                                 child: _glassCard(
@@ -343,7 +309,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                                     children: [
                                       Icon(Icons.skip_previous, color: glow, size: 30),
-                                      Icon(Icons.play_circle_fill, color: glow, size: 42),
+                                      Icon(Icons.play_circle_fill, color: glow, size: 44),
                                       Icon(Icons.skip_next, color: glow, size: 30),
                                     ],
                                   ),
@@ -352,9 +318,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ],
                           ),
                         ),
-                        const SizedBox(width: 14),
+                        const SizedBox(width: 12),
 
-                        // ۲. ستون وسط: سرعت‌سنج HUD با لمس ۳ ثانیه‌ای
+                        // ۲. ستون وسط: سرعت‌سنج HUD با قابلیت لمس طولانی ۳ ثانیه
                         Expanded(
                           flex: 5,
                           child: GestureDetector(
@@ -363,16 +329,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               glow,
                               Center(
                                 child: Container(
-                                  width: 200,
-                                  height: 200,
+                                  width: 210,
+                                  height: 210,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
                                     border: Border.all(color: glow, width: 3.5),
                                     boxShadow: [
                                       BoxShadow(
                                         color: glow.withOpacity(0.35 * _currentIntensity),
-                                        blurRadius: 35,
-                                        spreadRadius: 4,
+                                        blurRadius: 32,
+                                        spreadRadius: 2,
                                       ),
                                     ],
                                   ),
@@ -382,19 +348,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       Text(
                                         _currentSpeed.toStringAsFixed(0),
                                         style: TextStyle(
-                                          fontSize: 66,
+                                          fontSize: 68,
                                           fontWeight: FontWeight.w900,
                                           color: glow,
-                                          shadows: [
-                                            Shadow(color: glow, blurRadius: 20),
-                                          ],
+                                          shadows: [Shadow(color: glow, blurRadius: 20)],
                                         ),
                                       ),
                                       Text(
                                         'KM / H',
                                         style: TextStyle(
                                           fontSize: 13,
-                                          fontWeight: FontWeight.w700,
+                                          fontWeight: FontWeight.bold,
                                           letterSpacing: 2,
                                           color: Colors.white.withOpacity(0.75),
                                         ),
@@ -406,9 +370,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 14),
+                        const SizedBox(width: 12),
 
-                        // ۳. ستون راست: وضعیت سنسورها و تیبا ۲
+                        // ۳. ستون راست: وضعیت سنسورها
                         Expanded(
                           flex: 3,
                           child: _glassCard(
@@ -416,10 +380,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             Column(
                               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                               children: [
-                                Text('سنسورهای خودرو', style: TextStyle(color: glow, fontSize: 13, fontWeight: FontWeight.bold)),
-                                _sensorBox(Icons.battery_charging_full, 'ولتاژ دینام', '14.1 V', Colors.greenAccent),
-                                _sensorBox(Icons.thermostat, 'دمای آب', '89 °C', Colors.amberAccent),
-                                _sensorBox(Icons.speed, 'دور موتور تقریبی', '850 RPM', Colors.cyanAccent),
+                                Text('وضعیت خودرو', style: TextStyle(color: glow, fontSize: 13, fontWeight: FontWeight.bold)),
+                                _sensorRow(Icons.battery_charging_full, 'ولتاژ دینام', '14.1 V', Colors.greenAccent),
+                                _sensorRow(Icons.thermostat, 'دمای آب', '89 °C', Colors.amberAccent),
+                                _sensorRow(Icons.speed, 'دور موتور', '850 RPM', Colors.cyanAccent),
                               ],
                             ),
                           ),
@@ -441,13 +405,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: const Color(0xFF0F1523).withOpacity(0.65),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: glow.withOpacity(0.35 * _currentIntensity), width: 1.5),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: glow.withOpacity(0.38 * _currentIntensity), width: 1.5),
         boxShadow: [
           BoxShadow(
             color: glow.withOpacity(0.08 * _currentIntensity),
             blurRadius: 18,
-            spreadRadius: 1,
           )
         ],
       ),
@@ -455,31 +418,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _appTile(String title, Color color, VoidCallback onTap) {
+  Widget _appBtn(String title, Color color, VoidCallback onTap) {
     return SizedBox(
       width: double.infinity,
-      height: 42,
+      height: 40,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: color.withOpacity(0.2),
           foregroundColor: Colors.white,
           side: BorderSide(color: color.withOpacity(0.8), width: 1.2),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           elevation: 0,
         ),
         onPressed: onTap,
-        child: Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+        child: Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
       ),
     );
   }
 
-  Widget _sensorBox(IconData icon, String label, String value, Color color) {
+  Widget _sensorRow(IconData icon, String label, String val, Color color) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
       decoration: BoxDecoration(
         color: Colors.black38,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: Colors.white10),
       ),
       child: Row(
@@ -487,12 +450,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           Row(
             children: [
-              Icon(icon, color: color, size: 20),
-              const SizedBox(width: 8),
+              Icon(icon, color: color, size: 18),
+              const SizedBox(width: 6),
               Text(label, style: const TextStyle(fontSize: 11, color: Colors.white70)),
             ],
           ),
-          Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color)),
+          Text(val, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color)),
         ],
       ),
     );
