@@ -31,40 +31,75 @@ jobs:
             flutter create . --platforms=android --org com.tiba.launcher --project-name tiba_project
           fi
 
-      - name: Show current Gradle config (diagnostic)
-        run: |
-          echo "=== android/build.gradle ==="
-          cat android/build.gradle || true
-          echo "=== android/settings.gradle ==="
-          cat android/settings.gradle || true
-
       - name: Update Kotlin Gradle plugin version
         run: |
           KOTLIN_VERSION="1.9.23"
-
-          # Case 1: old-style ext.kotlin_version exists -> update it
           if grep -q "ext.kotlin_version" android/build.gradle 2>/dev/null; then
             sed -i.bak "s/ext.kotlin_version *= *'[^']*'/ext.kotlin_version = '$KOTLIN_VERSION'/" android/build.gradle
-            echo "Updated ext.kotlin_version in android/build.gradle"
-
-          # Case 2: plugins DSL in build.gradle -> update kotlin version there
-          elif grep -q "org.jetbrains.kotlin" android/build.gradle 2>/dev/null; then
-            sed -i.bak "s/id \"org.jetbrains.kotlin.android\" version \"[^\"]*\"/id \"org.jetbrains.kotlin.android\" version \"$KOTLIN_VERSION\"/; s/id 'org.jetbrains.kotlin.android' version '[^']*'/id 'org.jetbrains.kotlin.android' version '$KOTLIN_VERSION'/" android/build.gradle
-            echo "Updated kotlin plugin in android/build.gradle"
-
-          # Case 3: plugins DSL in settings.gradle -> update there
+            echo "Updated ext.kotlin_version"
           elif grep -q "org.jetbrains.kotlin" android/settings.gradle 2>/dev/null; then
-            sed -i.bak "s/id \"org.jetbrains.kotlin.android\" version \"[^\"]*\"/id \"org.jetbrains.kotlin.android\" version \"$KOTLIN_VERSION\"/; s/id 'org.jetbrains.kotlin.android' version '[^']*'/id 'org.jetbrains.kotlin.android' version '$KOTLIN_VERSION'/; s/org.jetbrains.kotlin:android [0-9.]*/org.jetbrains.kotlin:android $KOTLIN_VERSION/" android/settings.gradle
-            echo "Updated kotlin plugin in android/settings.gradle"
-
-          # Case 4: no kotlin declaration found -> add ext line to build.gradle
-          else
-            sed -i.bak "1i ext.kotlin_version = '$KOTLIN_VERSION'\n" android/build.gradle
-            echo "Added ext.kotlin_version to android/build.gradle"
+            sed -i.bak "s/id \"org.jetbrains.kotlin.android\" version \"[^\"]*\"/id \"org.jetbrains.kotlin.android\" version \"$KOTLIN_VERSION\"/; s/id 'org.jetbrains.kotlin.android' version '[^']*'/id 'org.jetbrains.kotlin.android' version '$KOTLIN_VERSION'/" android/settings.gradle
+            echo "Updated kotlin plugin in settings.gradle"
           fi
 
-          echo "--- Result ---"
-          grep -n "kotlin" android/build.gradle android/settings.gradle || true
+      - name: Patch AndroidManifest (launcher mode + audio service + permissions)
+        run: |
+          python3 - <<'EOF'
+          path = 'android/app/src/main/AndroidManifest.xml'
+          s = open(path, encoding='utf-8').read()
+
+          # --- permissions ---
+          perms = '''    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+          '''
+          if 'FOREGROUND_SERVICE_MEDIA_PLAYBACK' not in s:
+              # insert right after opening <manifest ...> tag
+              idx = s.index('>') + 1
+              s = s[:idx] + '\n' + perms + s[idx:]
+
+          # --- launcher (HOME) categories ---
+          if 'category.HOME' not in s:
+              s = s.replace(
+                  '<category android:name="android.intent.category.LAUNCHER" />',
+                  '<category android:name="android.intent.category.LAUNCHER" />\n'
+                  '                <category android:name="android.intent.category.HOME" />\n'
+                  '                <category android:name="android.intent.category.DEFAULT" />'
+              )
+
+          # --- singleTask launch mode ---
+          if 'launchMode' not in s:
+              s = s.replace('<activity', '<activity\n                android:launchMode="singleTask"', 1)
+
+          # --- audio service + receiver before </application> ---
+          svc = '''
+                  <service
+                      android:name="com.ryanheise.audioservice.AudioService"
+                      android:foregroundServiceType="mediaPlayback"
+                      android:exported="false" />
+                  <receiver
+                      android:name="com.ryanheise.audioservice.MediaButtonReceiver"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MEDIA_BUTTON" />
+                      </intent-filter>
+                  </receiver>
+              '''
+          if 'audioservice.AudioService' not in s:
+              s = s.replace('</application>', svc + '\n    </application>')
+
+          open(path, 'w', encoding='utf-8').write(s)
+          print('Manifest patched:')
+          print(s)
+          EOF
+
+      - name: Update Kotlin Gradle plugin version (fallback for old-style projects)
+        run: |
+          if grep -q "ext.kotlin_version" android/build.gradle 2>/dev/null; then
+            sed -i.bak "s/ext.kotlin_version *= *'[^']*'/ext.kotlin_version = '1.9.23'/" android/build.gradle
+          fi
 
       - name: Fix asset paths in pubspec.yaml (find missing files and remap)
         run: |
@@ -104,46 +139,3 @@ jobs:
                   with open(path, 'wb') as f:
                       f.write(png)
                   print(f"Created placeholder asset: {path}")
-                  changed = True
-              return m.group(0)
-
-          out_lines = []
-          in_assets = False
-          for line in pubspec.splitlines(keepends=True):
-              if re.match(r'^\s*assets\s*:\s*$', line):
-                  in_assets = True
-                  out_lines.append(line)
-                  continue
-              if in_assets:
-                  m = re.match(r'^(\s*-\s*)(.+)$', line)
-                  if m:
-                      out_lines.append(fix_line(m))
-                      continue
-                  in_assets = False
-              out_lines.append(line)
-
-          if changed:
-              open(pubspec_path, 'w', encoding='utf-8').write(''.join(out_lines))
-              print("pubspec.yaml updated")
-          else:
-              print("pubspec.yaml already consistent")
-          EOF
-
-      - name: Disable lintVital (common release build breaker)
-        run: |
-          FILE=android/app/build.gradle
-          if [ -f "$FILE" ] && ! grep -q "checkReleaseBuilds" "$FILE"; then
-            printf '\nandroid {\n    lint {\n        checkReleaseBuilds false\n        abortOnError false\n    }\n}\n' >> "$FILE"
-          fi
-
-      - name: Get dependencies
-        run: flutter pub get
-
-      - name: Build APK
-        run: flutter build apk --split-per-abi
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: tiba-apk
-          path: build/app/outputs/flutter-apk/*.apk
