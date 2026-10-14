@@ -1,55 +1,33 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:audio_session/audio_session.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:just_audio_background/just_audio_background.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
-Future<void> main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.landscapeLeft,
     DeviceOrientation.landscapeRight,
   ]);
-
-  try {
-    await JustAudioBackground.init(
-      androidNotificationChannelId: 'com.tiba.launcher.channel.audio',
-      androidNotificationChannelName: 'پخش موسیقی تیبا',
-      androidNotificationOngoing: true,
-    );
-  } catch (_) {}
-
-  try {
-    await WakelockPlus.enable();
-  } catch (_) {}
-
-  runApp(const TibaModernLauncherApp());
+  runApp(const TibaLauncherApp());
 }
 
-class TibaModernLauncherApp extends StatelessWidget {
-  const TibaModernLauncherApp({super.key});
+class TibaLauncherApp extends StatelessWidget {
+  const TibaLauncherApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Tiba Dashboard',
       debugShowCheckedModeBanner: false,
+      title: 'Tiba 2 Launcher',
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF070B11),
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFF00E5FF),
-          secondary: Color(0xFFFF6D00),
-          surface: Color(0xFF101726),
-        ),
+        scaffoldBackgroundColor: const Color(0xFF090D16),
+        primaryColor: const Color(0xFF00E5FF),
       ),
       home: const DashboardScreen(),
     );
@@ -64,116 +42,86 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  static const MethodChannel _appChannel = MethodChannel('com.tiba.launcher/app');
+  // Navigation Bar State
+  int _selectedNavIndex = 0;
 
-  // Music Player
-  late AudioPlayer _player;
-  List<String> _playlist = [];
-  int _currentIndex = 0;
-  String _currentTitle = "آهنگی انتخاب نشده";
-  bool _isPlaying = false;
-
-  // GPS & Speed
+  // Car Sensors & HUD State
   double _speed = 0.0;
+  double _rpm = 850.0;
+  String _timeString = '';
+  String _dateString = '';
   StreamSubscription<Position>? _positionStream;
+  Timer? _timer;
 
-  // Time & Status
-  late Timer _timer;
-  String _currentTime = "";
+  // Audio Player State
+  late AudioPlayer _audioPlayer;
+  String _currentTrackTitle = 'آهنگی انتخاب نشده است';
+  String _currentArtist = 'سیستم صوتی تیبا';
+  bool _isPlaying = false;
+  Duration _duration = Duration.zero;
+  Duration _position = Duration.zero;
+
+  // Car Status Mock Data
+  final double _tirePressureFL = 32.0;
+  final double _tirePressureFR = 32.5;
+  final double _tirePressureRL = 31.8;
+  final double _tirePressureRR = 32.0;
+  final double _fuelLevel = 0.65;
+  final int _batteryPercent = 94;
 
   @override
   void initState() {
     super.initState();
-    _initAudio();
-    _initLocation();
+    WakelockPlus.enable();
+    _initDateTime();
+    _initGps();
+    _initAudioPlayer();
+  }
+
+  void _initDateTime() {
     _updateClock();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) => _updateClock());
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      _updateClock();
+      // شبیه‌سازی ملایم دور موتور در هنگام درجا کار کردن
+      if (_speed == 0 && mounted) {
+        setState(() {
+          _rpm = 820.0 + math.Random().nextInt(60);
+        });
+      }
+    });
   }
 
   void _updateClock() {
     final now = DateTime.now();
     setState(() {
-      _currentTime =
-          "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+      _timeString =
+          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+      _dateString = '${now.year}/${now.month.toString().padLeft(2, '0')}/${now.day.toString().padLeft(2, '0')}';
     });
   }
 
-  Future<void> _initAudio() async {
-    _player = AudioPlayer();
-    final session = await AudioSession.instance;
-    await session.configure(const AudioSessionConfiguration.music());
-
-    _player.playerStateStream.listen((state) {
-      if (mounted) {
-        setState(() {
-          _isPlaying = state.playing;
-        });
-      }
-    });
-
-    _player.currentIndexStream.listen((index) {
-      if (index != null && index < _playlist.length && mounted) {
-        setState(() {
-          _currentIndex = index;
-          _currentTitle = _playlist[index].split('/').last;
-        });
-      }
-    });
-  }
-
-  Future<void> _pickAudioFiles() async {
-    try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.audio,
-        allowMultiple: true,
-      );
-
-      if (result != null && result.paths.isNotEmpty) {
-        _playlist = result.paths.whereType<String>().toList();
-        final audioSources = _playlist.map((path) {
-          final title = path.split('/').last;
-          return AudioSource.file(
-            path,
-            tag: MediaItem(
-              id: path,
-              album: "آهنگ‌های خودرو",
-              title: title,
-              artUri: Uri.parse("asset:///tiba2.png"),
-            ),
-          );
-        }).toList();
-
-        await _player.setAudioSource(
-          ConcatenatingAudioSource(children: audioSources),
-        );
-        await _player.play();
-        setState(() {
-          _currentIndex = 0;
-          _currentTitle = _playlist[0].split('/').last;
-        });
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _initLocation() async {
+  Future<void> _initGps() async {
     try {
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
-      if (permission == LocationPermission.always ||
-          permission == LocationPermission.whileInUse) {
+      if (permission == LocationPermission.whileInUse ||
+          permission == LocationPermission.always) {
+        const locationSettings = LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 1,
+        );
         _positionStream = Geolocator.getPositionStream(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.bestForNavigation,
-            distanceFilter: 1,
-          ),
+          locationSettings: locationSettings,
         ).listen((Position position) {
           if (mounted) {
-            double speedKmh = (position.speed * 3.6);
-            if (speedKmh < 0) speedKmh = 0;
             setState(() {
-              _speed = speedKmh;
+              double speedKmh = (position.speed * 3.6);
+              _speed = speedKmh < 0 ? 0 : speedKmh;
+              if (_speed > 0) {
+                _rpm = 1000 + (_speed * 35);
+              }
             });
           }
         });
@@ -181,82 +129,70 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } catch (_) {}
   }
 
-  Future<void> _launchApp(String packageName, String fallbackUrl) async {
-    try {
-      final bool success = await _appChannel.invokeMethod('launchApp', {'package': packageName});
-      if (!success) {
-        final uri = Uri.parse(fallbackUrl);
-        if (await canLaunchUrl(uri)) await launchUrl(uri);
+  Future<void> _initAudioPlayer() async {
+    _audioPlayer = AudioPlayer();
+    _audioPlayer.playerStateStream.listen((state) {
+      if (mounted) {
+        setState(() {
+          _isPlaying = state.playing;
+        });
       }
-    } catch (_) {
-      final uri = Uri.parse(fallbackUrl);
-      if (await canLaunchUrl(uri)) await launchUrl(uri);
-    }
+    });
+
+    _audioPlayer.durationStream.listen((d) {
+      if (mounted) {
+        setState(() {
+          _duration = d ?? Duration.zero;
+        });
+      }
+    });
+
+    _audioPlayer.positionStream.listen((p) {
+      if (mounted) {
+        setState(() {
+          _position = p;
+        });
+      }
+    });
   }
 
-  void _openAllApps() async {
+  Future<void> _pickAudioFile() async {
     try {
-      final List<dynamic>? apps = await _appChannel.invokeMethod('getInstalledApps');
-      if (!mounted || apps == null) return;
-
-      showModalBottomSheet(
-        context: context,
-        backgroundColor: const Color(0xEB0A0E17),
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        builder: (ctx) {
-          return Container(
-            padding: const EdgeInsets.all(16),
-            child: GridView.builder(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 6,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-              ),
-              itemCount: apps.length,
-              itemBuilder: (context, index) {
-                final app = apps[index];
-                return InkWell(
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _launchApp(app['package'], '');
-                  },
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF131D2E),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.3)),
-                        ),
-                        child: const Icon(Icons.apps, color: Color(0xFF00E5FF), size: 28),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        app['name'] ?? '',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 11, color: Colors.white70),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          );
-        },
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.audio,
       );
+      if (result != null && result.files.single.path != null) {
+        final filePath = result.files.single.path!;
+        final fileName = result.files.single.name;
+        await _audioPlayer.setFilePath(filePath);
+        _audioPlayer.play();
+        setState(() {
+          _currentTrackTitle = fileName.replaceAll('.mp3', '');
+          _currentArtist = 'پوشه محلی';
+        });
+      }
     } catch (_) {}
+  }
+
+  void _openMapIntent() {
+    // باز کردن نقشه با ارسال اینتنت عمومی اندروید بدون نیاز به url_launcher
+    const intentChannel = MethodChannel('plugins.flutter.io/url_launcher');
+    intentChannel.invokeMethod('launch', {
+      'url': 'geo:35.6892,51.3890?q=مسیریابی',
+      'useSafariVC': false,
+      'useWebView': false,
+      'enableJavaScript': false,
+      'enableDomStorage': false,
+      'universalLinksOnly': false,
+      'headers': <String, String>{},
+    }).catchError((_) {});
   }
 
   @override
   void dispose() {
-    _timer.cancel();
+    _timer?.cancel();
     _positionStream?.cancel();
-    _player.dispose();
+    _audioPlayer.dispose();
     super.dispose();
   }
 
@@ -266,45 +202,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: Container(
         decoration: const BoxDecoration(
           gradient: RadialGradient(
-            center: Alignment(0.0, -0.2),
+            center: Alignment.center,
             radius: 1.2,
             colors: [
-              Color(0xFF111E33),
-              Color(0xFF06090F),
-              Color(0xFF020408),
+              Color(0xFF0F172A),
+              Color(0xFF050811),
             ],
           ),
         ),
         child: SafeArea(
           child: Row(
             children: [
-              // 1. سمت چپ: نوار عمودی باریک (مانند ستون آیکون‌های اپل کارپلی تصویر)
-              _buildLeftVerticalBar(),
+              // نوار ابزار عمودی سمت چپ
+              _buildModernSidebar(),
 
-              // محتوای اصلی داشبورد: ۳ بخش (نقشه، سرعت‌سنج مرکزی، موزیک و وضعیت ماشین)
+              // داشبورد اصلی
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
-                  child: Row(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+                  child: Column(
                     children: [
-                      // بخش ناوبری / نقشه (سمت چپ)
-                      Expanded(flex: 30, child: _buildNavigationCard()),
+                      // هدر بالای صفحه (زمان، وضعیت سیستم، باتری)
+                      _buildTopHeader(),
+                      const SizedBox(height: 10),
 
-                      const SizedBox(width: 12),
-
-                      // سرعت‌سنج عقربه‌ای/دیجیتال مرکزی (مرکز)
-                      Expanded(flex: 38, child: _buildCentralSpeedometer()),
-
-                      const SizedBox(width: 12),
-
-                      // پلیر موزیک و کارت وضعیت خودرو (سمت راست)
+                      // پنل ۳ بخشی وسط (نقشه، کیلومترشمار نئونی، پلیر و خودرو)
                       Expanded(
-                        flex: 32,
-                        child: Column(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Expanded(flex: 55, child: _buildMusicPlayerCard()),
-                            const SizedBox(height: 10),
-                            Expanded(flex: 45, child: _buildCarStatusCard()),
+                            // بخش ناوبری چپ
+                            Expanded(flex: 3, child: _buildNavCard()),
+                            const SizedBox(width: 14),
+
+                            // کیلومترشمار و دور موتور مرکزی
+                            Expanded(flex: 4, child: _buildCenterGauges()),
+                            const SizedBox(width: 14),
+
+                            // پلیر و وضعیت ماشین در راست
+                            Expanded(
+                              flex: 3,
+                              child: Column(
+                                children: [
+                                  Expanded(flex: 5, child: _buildMediaCard()),
+                                  const SizedBox(height: 10),
+                                  Expanded(flex: 4, child: _buildCarStatusCard()),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -319,40 +264,73 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // --- نوار میانبر عمودی سمت چپ ---
-  Widget _buildLeftVerticalBar() {
+  // سایدبار مدرن و آیکون‌ها
+  Widget _buildModernSidebar() {
+    final icons = [
+      Icons.speed_rounded,
+      Icons.map_outlined,
+      Icons.library_music_rounded,
+      Icons.directions_car_filled_rounded,
+      Icons.apps_rounded,
+      Icons.settings_rounded,
+    ];
+
     return Container(
-      width: 60,
-      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+      width: 72,
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF0B111C).withOpacity(0.9),
+        color: const Color(0xFF111827).withOpacity(0.85),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white.withOpacity(0.08)),
       ),
       child: Column(
         children: [
-          const SizedBox(height: 12),
-          Text(
-            _currentTime,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+          const SizedBox(height: 14),
+          const Icon(Icons.bolt, color: Color(0xFF00E5FF), size: 28),
+          const SizedBox(height: 20),
+          Expanded(
+            child: ListView.separated(
+              itemCount: icons.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 14),
+              itemBuilder: (context, index) {
+                final isSelected = _selectedNavIndex == index;
+                return Center(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () {
+                      setState(() {
+                        _selectedNavIndex = index;
+                      });
+                      if (index == 1) _openMapIntent();
+                    },
+                    child: Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? const Color(0xFF00E5FF).withOpacity(0.18)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(14),
+                        border: isSelected
+                            ? Border.all(color: const Color(0xFF00E5FF), width: 1.5)
+                            : null,
+                      ),
+                      child: Icon(
+                        icons[index],
+                        color: isSelected ? const Color(0xFF00E5FF) : Colors.white54,
+                        size: 24,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
           ),
-          const SizedBox(height: 4),
-          const Icon(Icons.wifi, size: 14, color: Color(0xFF00E5FF)),
-          const Spacer(),
-          _buildSidebarIconButton(Icons.map_outlined, const Color(0xFF00E5FF), () {
-            _launchApp("ir.neshan.sp", "https://neshan.org");
-          }),
-          const SizedBox(height: 12),
-          _buildSidebarIconButton(Icons.music_note_rounded, const Color(0xFFFF6D00), _pickAudioFiles),
-          const SizedBox(height: 12),
-          _buildSidebarIconButton(Icons.navigation_rounded, Colors.greenAccent, () {
-            _launchApp("ir.balad.app", "https://balad.ir");
-          }),
-          const Spacer(),
           IconButton(
-            icon: const Icon(Icons.grid_view_rounded, color: Colors.white70, size: 26),
-            onPressed: _openAllApps,
-            tooltip: "برنامه‌ها",
+            onPressed: () {
+              SystemNavigator.pop();
+            },
+            icon: const Icon(Icons.power_settings_new_rounded, color: Colors.redAccent),
           ),
           const SizedBox(height: 10),
         ],
@@ -360,246 +338,291 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildSidebarIconButton(IconData icon, Color color, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.12),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.3)),
-        ),
-        child: Icon(icon, color: color, size: 22),
-      ),
-    );
-  }
-
-  // --- پنل نقشه و ناوبری سمت چپ ---
-  Widget _buildNavigationCard() {
+  // هدر افقی بالای داشبورد
+  Widget _buildTopHeader() {
     return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF0D1422).withOpacity(0.85),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.25)),
+        color: const Color(0xFF131B2E).withOpacity(0.6),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
       ),
-      child: Stack(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // پس‌زمینه راداری نقشه با خطوط شبیه‌ساز
-          Positioned.fill(
-            child: Opacity(
-              opacity: 0.15,
-              child: CustomPaint(painter: MapGridPainter()),
+          Row(
+            children: [
+              const Icon(Icons.location_on, color: Color(0xFF00E5FF), size: 18),
+              const SizedBox(width: 6),
+              const Text(
+                'TIBA 2 HUD EDITION',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 12,
+                  letterSpacing: 2.0,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          Text(
+            _timeString,
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.5,
+              color: Colors.white,
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(14.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF00E5FF).withOpacity(0.2),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.turn_right_rounded, color: Color(0xFF00E5FF), size: 22),
-                    ),
-                    const SizedBox(width: 8),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text("مسیر یاب تیبا", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
-                          Text("موقعیت آنلاین فعال", style: TextStyle(fontSize: 10, color: Colors.white54)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildNavBtn("نشان", () => _launchApp("ir.neshan.sp", "https://neshan.org")),
-                    _buildNavBtn("بلد", () => _launchApp("ir.balad.app", "https://balad.ir")),
-                    _buildNavBtn("گوگل", () => _launchApp("com.google.android.apps.maps", "geo:0,0?q=")),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNavBtn(String title, VoidCallback onTap) {
-    return ElevatedButton(
-      onTap: onTap,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFF142138),
-        foregroundColor: const Color(0xFF00E5FF),
-        elevation: 0,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-          side: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.4)),
-        ),
-      ),
-      child: Text(title, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-    );
-  }
-
-  // --- سرعت‌سنج مدرن نئونی وسط داشبورد (مشابه عکس ارسالی) ---
-  Widget _buildCentralSpeedometer() {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF0B111C).withOpacity(0.9),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF00E5FF).withOpacity(0.06),
-            blurRadius: 20,
-            spreadRadius: 2,
-          ),
-        ],
-      ),
-      child: Center(
-        child: AspectRatio(
-          aspectRatio: 1.0,
-          child: CustomPaint(
-            painter: ModernDialPainter(speed: _speed),
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+          Row(
+            children: [
+              Text(_dateString, style: const TextStyle(color: Colors.white54, fontSize: 13)),
+              const SizedBox(width: 16),
+              const Icon(Icons.bluetooth_connected, color: Color(0xFF00E5FF), size: 18),
+              const SizedBox(width: 12),
+              const Icon(Icons.wifi, color: Colors.white70, size: 18),
+              const SizedBox(width: 12),
+              Row(
                 children: [
-                  const SizedBox(height: 10),
-                  Text(
-                    _speed.toStringAsFixed(0),
-                    style: const TextStyle(
-                      fontSize: 54,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.white,
-                      letterSpacing: -1,
-                    ),
-                  ),
-                  const Text(
-                    "KM/H",
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF00E5FF),
-                      letterSpacing: 2,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFF6D00).withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      "RPM ${(_speed * 35).clamp(800, 6500).toStringAsFixed(0)}",
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFFFF9E40),
-                      ),
-                    ),
-                  ),
+                  const Icon(Icons.battery_charging_full_rounded, color: Colors.greenAccent, size: 20),
+                  const SizedBox(width: 2),
+                  Text('$_batteryPercent%', style: const TextStyle(color: Colors.white, fontSize: 12)),
                 ],
               ),
-            ),
+            ],
           ),
-        ),
+        ],
       ),
     );
   }
 
-  // --- کارت موزیک پلیر سمت راست بالا (نارنجی نئونی شبیه تصویر) ---
-  Widget _buildMusicPlayerCard() {
+  // کارت ناوبری و نقشه
+  Widget _buildNavCard() {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF0E1624).withOpacity(0.9),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFFF6D00).withOpacity(0.4)),
+        color: const Color(0xFF101728),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Icon(Icons.equalizer_rounded, color: Color(0xFFFF6D00), size: 18),
-              const SizedBox(width: 6),
-              const Text(
-                "Now Playing",
-                style: TextStyle(fontSize: 11, color: Color(0xFFFF9E40), fontWeight: FontWeight.bold),
+              const Row(
+                children: [
+                  Icon(Icons.navigation_rounded, color: Color(0xFF00E5FF), size: 20),
+                  SizedBox(width: 8),
+                  Text('مسیریابی هوشمند', style: TextStyle(fontWeight: FontWeight.bold)),
+                ],
               ),
-              const Spacer(),
-              InkWell(
-                onTap: _pickAudioFiles,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
+              IconButton(
+                onPressed: _openMapIntent,
+                icon: const Icon(Icons.open_in_new, size: 18, color: Colors.white54),
+              )
+            ],
+          ),
+          const Spacer(),
+          Center(
+            child: Column(
+              children: [
+                Container(
+                  width: 70,
+                  height: 70,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFF6D00).withOpacity(0.2),
                     shape: BoxShape.circle,
+                    color: const Color(0xFF00E5FF).withOpacity(0.12),
+                    border: Border.all(color: const Color(0xFF00E5FF), width: 1.5),
                   ),
-                  child: const Icon(Icons.folder_open_rounded, size: 16, color: Color(0xFFFF9E40)),
+                  child: const Icon(Icons.turn_right_rounded, size: 40, color: Color(0xFF00E5FF)),
                 ),
+                const SizedBox(height: 12),
+                const Text(
+                  '۳۵۰ متر بعد، گردش به راست',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'بلوار اصلی',
+                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          const Spacer(),
+          ElevatedButton(
+            onPressed: _openMapIntent,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00E5FF).withOpacity(0.15),
+              foregroundColor: const Color(0xFF00E5FF),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: const BorderSide(color: Color(0xFF00E5FF), width: 1),
+              ),
+              minimumSize: const Size(double.infinity, 44),
+            ),
+            child: const Text('باز کردن نقشه سخنگو', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // مرکز سنجشگر نئونی (سرعت و دور موتور HUD)
+  Widget _buildCenterGauges() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF101728),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final dialSize = math.min(constraints.maxWidth, constraints.maxHeight);
+          return Center(
+            child: SizedBox(
+              width: dialSize,
+              height: dialSize,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  CustomPaint(
+                    size: Size(dialSize, dialSize),
+                    painter: DualHudGaugePainter(
+                      speed: _speed,
+                      rpm: _rpm,
+                    ),
+                  ),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        _speed.toStringAsFixed(0),
+                        style: const TextStyle(
+                          fontSize: 68,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                          height: 1.0,
+                        ),
+                      ),
+                      const Text(
+                        'KM/H',
+                        style: TextStyle(
+                          color: Color(0xFF00E5FF),
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 2.0,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.black38,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.white12),
+                        ),
+                        child: Text(
+                          'RPM ${_rpm.toStringAsFixed(0)}',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // پنل مدیا پلیر
+  Widget _buildMediaCard() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF101728),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.music_note_rounded, color: Color(0xFF00E5FF), size: 18),
+                  SizedBox(width: 6),
+                  Text('پخش موسیقی', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                icon: const Icon(Icons.folder_open, size: 20, color: Color(0xFF00E5FF)),
+                onPressed: _pickAudioFile,
               ),
             ],
           ),
           const Spacer(),
           Text(
-            _currentTitle,
+            _currentTrackTitle,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
           ),
-          const SizedBox(height: 4),
-          const Text("سیستم صوتی تیبا", style: TextStyle(fontSize: 10, color: Colors.white54)),
-          const Spacer(),
+          Text(
+            _currentArtist,
+            style: const TextStyle(color: Colors.white54, fontSize: 11),
+          ),
+          const SizedBox(height: 8),
+          LinearProgressIndicator(
+            value: _duration.inSeconds > 0
+                ? (_position.inSeconds / _duration.inSeconds).clamp(0.0, 1.0)
+                : 0.0,
+            backgroundColor: Colors.white10,
+            color: const Color(0xFF00E5FF),
+            minHeight: 4,
+          ),
+          const SizedBox(height: 6),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               IconButton(
-                icon: const Icon(Icons.skip_previous_rounded, color: Colors.white, size: 24),
+                iconSize: 22,
+                icon: const Icon(Icons.skip_previous_rounded),
                 onPressed: () {
-                  if (_player.hasPrevious) _player.seekToPrevious();
+                  _audioPlayer.seek(Duration.zero);
                 },
-              ),
-              GestureDetector(
-                onTap: () {
-                  if (_isPlaying) {
-                    _player.pause();
-                  } else {
-                    _player.play();
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFFF6D00),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                    color: Colors.white,
-                    size: 22,
-                  ),
-                ),
               ),
               IconButton(
-                icon: const Icon(Icons.skip_next_rounded, color: Colors.white, size: 24),
+                iconSize: 32,
+                color: const Color(0xFF00E5FF),
+                icon: Icon(_isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill),
                 onPressed: () {
-                  if (_player.hasNext) _player.seekToNext();
+                  if (_isPlaying) {
+                    _audioPlayer.pause();
+                  } else {
+                    _audioPlayer.play();
+                  }
+                },
+              ),
+              IconButton(
+                iconSize: 22,
+                icon: const Icon(Icons.skip_next_rounded),
+                onPressed: () {
+                  _audioPlayer.seek(_duration);
                 },
               ),
             ],
@@ -609,179 +632,130 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // --- کارت وضعیت خودرو Car Status سمت راست پایین ---
+  // کارت اطلاعات و وضعیت خودرو
   Widget _buildCarStatusCard() {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF0E1624).withOpacity(0.85),
+        color: const Color(0xFF101728),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.2)),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
       ),
-      child: Row(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Expanded(
-            flex: 5,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text(
-                  "Car Status",
-                  style: TextStyle(fontSize: 11, color: Color(0xFF00E5FF), fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  "TIBA 2 EX",
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Colors.white),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle)),
-                    const SizedBox(width: 6),
-                    const Text("سیستم آماده", style: TextStyle(fontSize: 10, color: Colors.white70)),
-                  ],
-                ),
-              ],
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('وضعیت باد تایرها (PSI)', style: TextStyle(fontSize: 11, color: Colors.white70)),
+              Text('${(_fuelLevel * 100).toInt()}% بنزین', style: const TextStyle(fontSize: 11, color: Colors.amberAccent)),
+            ],
           ),
-          Expanded(
-            flex: 5,
-            child: Center(
-              child: CustomPaint(
-                size: const Size(100, 50),
-                painter: NeonCarSilhouettePainter(),
-              ),
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildTireIndicator('جلو چ', _tirePressureFL),
+              _buildTireIndicator('جلو ر', _tirePressureFR),
+              _buildTireIndicator('عقب چ', _tirePressureRL),
+              _buildTireIndicator('عقب ر', _tirePressureRR),
+            ],
           ),
         ],
       ),
     );
   }
+
+  Widget _buildTireIndicator(String label, double psi) {
+    return Column(
+      children: [
+        Text(label, style: const TextStyle(fontSize: 9, color: Colors.white38)),
+        const SizedBox(height: 2),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Colors.greenAccent.withOpacity(0.4)),
+          ),
+          child: Text(
+            psi.toStringAsFixed(1),
+            style: const TextStyle(fontSize: 10, color: Colors.greenAccent, fontWeight: FontWeight.bold),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
-// ==================== رسم دیال و گیج‌های نئونی سرعت‌سنج مرکزی ====================
-
-class ModernDialPainter extends CustomPainter {
+// رسم‌کننده سرعت‌سنج و دور موتور دوگانه با افکت نئونی
+class DualHudGaugePainter extends CustomPainter {
   final double speed;
-  ModernDialPainter({required this.speed});
+  final double rpm;
+
+  DualHudGaugePainter({required this.speed, required this.rpm});
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2 - 12;
+    final radius = (size.width / 2) - 16;
 
-    // 1. حلقه بیرونی تیره
-    final baseArcPaint = Paint()
-      ..color = const Color(0xFF142138)
-      ..strokeWidth = 6
-      ..style = PaintingStyle.stroke;
-    canvas.drawCircle(center, radius, baseArcPaint);
+    final bgPaint = Paint()
+      ..color = Colors.white.withOpacity(0.06)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 10
+      ..strokeCap = StrokeCap.round;
 
-    // 2. حلقه فیروزه‌ای پیشرفت سرعت (Cyan Arc)
-    final progressPaint = Paint()
-      ..color = const Color(0xFF00E5FF)
-      ..strokeWidth = 8
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
+    final speedPaint = Paint()
+      ..shader = const SweepGradient(
+        colors: [Color(0xFF0052D4), Color(0xFF4364F7), Color(0xFF00E5FF)],
+      ).createShader(Rect.fromCircle(center: center, radius: radius))
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 10
+      ..strokeCap = StrokeCap.round;
 
-    double maxSpeed = 180.0;
-    double sweepAngle = (speed.clamp(0.0, maxSpeed) / maxSpeed) * (math.pi * 1.5);
+    final rpmPaint = Paint()
+      ..shader = const SweepGradient(
+        colors: [Colors.tealAccent, Colors.orangeAccent, Colors.redAccent],
+      ).createShader(Rect.fromCircle(center: center, radius: radius - 14))
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round;
+
+    const startAngle = 135 * (math.pi / 180);
+    const sweepTotalAngle = 270 * (math.pi / 180);
+
+    // پس‌زمینه سرعت‌سنج
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),
-      math.pi * 0.75,
-      sweepAngle,
+      startAngle,
+      sweepTotalAngle,
       false,
-      progressPaint,
+      bgPaint,
     );
 
-    // 3. حلقه داخلی نارنجی دور موتور (Orange RPM Indicator)
-    final innerOrangePaint = Paint()
-      ..color = const Color(0xFFFF6D00)
-      ..strokeWidth = 4
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-
-    double rpmSweep = ((speed * 35).clamp(800, 6500) / 6500) * (math.pi * 1.2);
+    // پیشرفت سرعت‌سنج (ماکزیمم 220 کیلومتر بر ساعت)
+    final speedPercent = (speed / 220.0).clamp(0.0, 1.0);
     canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius - 16),
-      math.pi * 0.9,
-      rpmSweep,
+      Rect.fromCircle(center: center, radius: radius),
+      startAngle,
+      sweepTotalAngle * speedPercent,
       false,
-      innerOrangePaint,
+      speedPaint,
     );
 
-    // 4. خطوط تیک سرعت (Tick marks)
-    final tickPaint = Paint()
-      ..color = Colors.white24
-      ..strokeWidth = 1.5;
-
-    for (int i = 0; i <= 36; i++) {
-      double angle = (math.pi * 0.75) + (i * (math.pi * 1.5) / 36);
-      Offset p1 = Offset(center.dx + (radius - 8) * math.cos(angle), center.dy + (radius - 8) * math.sin(angle));
-      Offset p2 = Offset(center.dx + (radius - 2) * math.cos(angle), center.dy + (radius - 2) * math.sin(angle));
-      canvas.drawLine(p1, p2, tickPaint);
-    }
+    // پیشرفت دور موتور داخلی (ماکزیمم 7000 دور)
+    final rpmPercent = (rpm / 7000.0).clamp(0.0, 1.0);
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius - 14),
+      startAngle,
+      sweepTotalAngle * rpmPercent,
+      false,
+      rpmPaint,
+    );
   }
 
   @override
-  bool shouldRepaint(covariant ModernDialPainter oldDelegate) => oldDelegate.speed != speed;
-}
-
-// نقاشی نئونی شماتیک خودرو برای پنل Car Status
-class NeonCarSilhouettePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFF00E5FF)
-      ..strokeWidth = 2.0
-      ..style = PaintingStyle.stroke;
-
-    final fillPaint = Paint()
-      ..color = const Color(0xFF00E5FF).withOpacity(0.08)
-      ..style = PaintingStyle.fill;
-
-    final path = Path();
-    path.moveTo(0, size.height * 0.7);
-    path.lineTo(size.width * 0.15, size.height * 0.65);
-    path.lineTo(size.width * 0.35, size.height * 0.3);
-    path.lineTo(size.width * 0.65, size.height * 0.3);
-    path.lineTo(size.width * 0.85, size.height * 0.55);
-    path.lineTo(size.width, size.height * 0.7);
-    path.lineTo(size.width * 0.85, size.height * 0.85);
-    path.lineTo(size.width * 0.15, size.height * 0.85);
-    path.close();
-
-    canvas.drawPath(path, fillPaint);
-    canvas.drawPath(path, paint);
-
-    // چرخ‌ها
-    final wheelPaint = Paint()..color = const Color(0xFFFF6D00);
-    canvas.drawCircle(Offset(size.width * 0.22, size.height * 0.85), 6, wheelPaint);
-    canvas.drawCircle(Offset(size.width * 0.78, size.height * 0.85), 6, wheelPaint);
+  bool shouldRepaint(covariant DualHudGaugePainter oldDelegate) {
+    return oldDelegate.speed != speed || oldDelegate.rpm != rpm;
   }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-// نقاشی گرید پس‌زمینه کارت نقشه
-class MapGridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFF00E5FF)
-      ..strokeWidth = 1.0;
-
-    for (double i = 0; i < size.width; i += 24) {
-      canvas.drawLine(Offset(i, 0), Offset(i, size.height), paint);
-    }
-    for (double j = 0; j < size.height; j += 24) {
-      canvas.drawLine(Offset(0, j), Offset(size.width, j), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
