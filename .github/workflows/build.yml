@@ -42,7 +42,6 @@ jobs:
           python3 - <<'EOF'
           import os, re
 
-          # ۱. تنظیم در settings.gradle
           settings_gradle = 'android/settings.gradle'
           if os.path.exists(settings_gradle):
               content = open(settings_gradle, encoding='utf-8').read()
@@ -53,7 +52,6 @@ jobs:
                       content = content.replace('plugins {', 'plugins {\n    id "org.jetbrains.kotlin.android" version "2.1.0" apply false')
               open(settings_gradle, 'w', encoding='utf-8').write(content)
 
-          # ۲. تنظیم در root build.gradle
           build_gradle = 'android/build.gradle'
           if os.path.exists(build_gradle):
               content = open(build_gradle, encoding='utf-8').read()
@@ -122,71 +120,100 @@ jobs:
         run: |
           flutter pub get
 
-      - name: Fix All Broken Plugins In Pub Cache
+      - name: Bruteforce Patch All Cached Plugins
         run: |
           python3 - <<'EOF'
-          import os, re
+          import os, glob
 
           cache_dir = os.path.expanduser('~/.pub-cache')
           for root, dirs, files in os.walk(cache_dir):
               for file in files:
-                  if file == 'build.gradle':
-                      path = os.path.join(root, file)
+                  if file.endswith('build.gradle'):
+                      filepath = os.path.join(root, file)
                       try:
-                          with open(path, 'r', encoding='utf-8', errors='ignore') as f:
-                              content = f.read()
-
-                          # جایگزینی ارجاعات معیوب به شیء flutter در تمام پلاگین‌ها
-                          fixed = content
-                          fixed = re.sub(r'compileSdkVersion\s+(?:project\.android\.flutter\.|flutter\.)compileSdkVersion', 'compileSdkVersion 35', fixed)
-                          fixed = re.sub(r'compileSdk\s+(?:project\.android\.flutter\.|flutter\.)compileSdkVersion', 'compileSdk 35', fixed)
-                          fixed = re.sub(r'targetSdkVersion\s+(?:project\.android\.flutter\.|flutter\.)targetSdkVersion', 'targetSdkVersion 35', fixed)
-                          fixed = re.sub(r'minSdkVersion\s+(?:project\.android\.flutter\.|flutter\.)minSdkVersion', 'minSdkVersion 21', fixed)
-
-                          if fixed != content:
-                              with open(path, 'w', encoding='utf-8') as f:
-                                  f.write(fixed)
-                              print(f"Patched: {path}")
+                          with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                              lines = f.readlines()
+                          
+                          changed = False
+                          new_lines = []
+                          for line in lines:
+                              # هر جا اشاره‌ای به متغیر flutter برای sdk شده با عدد ثابت جایگزین کن
+                              if 'compileSdkVersion' in line and ('flutter' in line or 'project.' in line):
+                                  new_lines.append('    compileSdkVersion 35\n')
+                                  changed = True
+                              elif 'compileSdk ' in line and ('flutter' in line or 'project.' in line):
+                                  new_lines.append('    compileSdk = 35\n')
+                                  changed = True
+                              elif 'minSdkVersion' in line and ('flutter' in line or 'project.' in line):
+                                  new_lines.append('    minSdkVersion 21\n')
+                                  changed = True
+                              elif 'targetSdkVersion' in line and ('flutter' in line or 'project.' in line):
+                                  new_lines.append('    targetSdkVersion 35\n')
+                                  changed = True
+                              else:
+                                  new_lines.append(line)
+                          
+                          if changed:
+                              with open(filepath, 'w', encoding='utf-8') as f:
+                                  f.writelines(new_lines)
+                              print(f"Patched: {filepath}")
                       except Exception as e:
                           pass
           EOF
 
-      - name: Overwrite Broken Geolocator Gradle
+      - name: Overwrite Known Fragile Plugins
         run: |
+          # 1. Geolocator
           find /home/runner/.pub-cache -name "build.gradle" | grep "geolocator_android" | while read file; do
             cat << 'GRADLE_EOF' > "$file"
           group 'com.baseflow.geolocator'
           version '1.0-SNAPSHOT'
-
           buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.1.0'
-              }
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.1.0' }
           }
-
           apply plugin: 'com.android.library'
-
           android {
               namespace "com.baseflow.geolocator"
               compileSdkVersion 35
-
               defaultConfig {
                   minSdkVersion 21
-                  testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
               }
-
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_1_8
                   targetCompatibility JavaVersion.VERSION_1_8
               }
           }
-
           dependencies {
               implementation 'com.google.android.gms:play-services-location:21.2.0'
+              implementation 'androidx.annotation:annotation:1.7.1'
+              implementation 'androidx.core:core:1.13.1'
+          }
+          GRADLE_EOF
+          done
+
+          # 2. Package Info Plus
+          find /home/runner/.pub-cache -name "build.gradle" | grep "package_info_plus" | while read file; do
+            cat << 'GRADLE_EOF' > "$file"
+          group 'dev.fluttercommunity.plus.packageinfo'
+          version '1.0-SNAPSHOT'
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.1.0' }
+          }
+          apply plugin: 'com.android.library'
+          android {
+              namespace "dev.fluttercommunity.plus.packageinfo"
+              compileSdkVersion 35
+              defaultConfig {
+                  minSdkVersion 21
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_1_8
+                  targetCompatibility JavaVersion.VERSION_1_8
+              }
+          }
+          dependencies {
               implementation 'androidx.annotation:annotation:1.7.1'
               implementation 'androidx.core:core:1.13.1'
           }
