@@ -25,16 +25,24 @@ jobs:
           flutter-version: '3.19.6'
           channel: 'stable'
 
-      - name: Fix Project Name and Create Android Structure
+      - name: Clean Build via Temp Project
         run: |
-          sed -i 's/name: .*/name: tiba_project/' pubspec.yaml
-          flutter create . --platforms=android --org com.tiba.launcher
-
-      - name: Get dependencies
-        run: flutter pub get
-
-      - name: Build APK
-        run: flutter build apk --split-per-abi
+          # ساخت یک پروژه موقت کاملاً استاندارد و سالم
+          flutter create temp_app --platforms=android --org com.tiba.launcher --project-name tiba_project
+          
+          # کپی کردن کدهای دارت و پاب‌اسپک خودمان به پروژه جدید
+          rm -rf temp_app/lib temp_app/pubspec.yaml
+          cp -r lib temp_app/
+          cp pubspec.yaml temp_app/
+          
+          # انتقال به پوشه موقت و اجرای بیلد
+          cd temp_app
+          flutter pub get
+          flutter build apk --split-per-abi
+          
+          # کپی کردن خروجی APK به پوشه اصلی برای آپلود
+          mkdir -p ../build/app/outputs/flutter-apk/
+          cp build/app/outputs/flutter-apk/*.apk ../build/app/outputs/flutter-apk/
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
