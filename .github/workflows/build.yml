@@ -27,40 +27,21 @@ jobs:
 
       - name: Create and Setup Project
         run: |
-          # 1. ساخت پروژه تمیز اندرویدی با الگوی رسمی اپلیکیشن
+          # 1. ساخت پروژه تمیز بدون ناسازگاری گریدل
           flutter create -t app --platforms=android --org com.tiba.launcher tiba_project
           cd tiba_project
 
-          # 2. کپی کردن فایل‌های پروژه شما
+          # 2. کپی فایل‌های پروژه شما
           cp ../lib/main.dart lib/main.dart
           cp ../pubspec.yaml pubspec.yaml
           if [ -f ../tiba2.png ]; then
             cp ../tiba2.png tiba2.png
           fi
 
-          # 3. افزودن مخازن رسمی گریدل
-          mkdir -p ~/.gradle
-          cat << 'EOF' > ~/.gradle/init.gradle
-          allprojects {
-              buildscript {
-                  repositories {
-                      google()
-                      mavenCentral()
-                      gradlePluginPortal()
-                  }
-              }
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          EOF
-
-          # 4. افزودن تگ‌های لانچر پیش‌فرض مانیتور خودرو به AndroidManifest
+          # 3. افزودن تگ لانچر خودرو به مانیفست
           sed -i '/<category android:name="android.intent.category.LAUNCHER"\/>/a \                <category android:name="android.intent.category.HOME"\/>\n                <category android:name="android.intent.category.DEFAULT"\/>' android/app/src/main/AndroidManifest.xml
 
-          # 5. دریافت وابستگی‌ها
+          # 4. دریافت پکیج‌ها
           flutter pub get
 
       - name: Build APK
