@@ -22,6 +22,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-
   assets:
     - tiba2.png
+    - tiba2_rear.png
