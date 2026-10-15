@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,8 +41,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // GPS & Speed
   double _currentSpeed = 0.0;
   double _speedMultiplier = 1.0;
-  StreamSubscription<Position>? _positionStream;
-  bool _isGpsActive = false;
+  bool _isGpsActive = true;
+  Timer? _gpsMockTimer;
 
   // Selected Nav App
   String _selectedNavName = 'نشان (Neshan)';
@@ -63,7 +61,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _initTime();
-    _initGps();
+    _initNativeGps();
   }
 
   void _initTime() {
@@ -82,65 +80,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
-  Future<void> _initGps() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      setState(() => _isGpsActive = false);
-      return;
-    }
-
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) return;
-    }
-    if (permission == LocationPermission.deniedForever) return;
-
-    setState(() => _isGpsActive = true);
-
-    const locationSettings = LocationSettings(
-      accuracy: LocationAccuracy.bestForNavigation,
-      distanceFilter: 1,
-    );
-
-    _positionStream =
-        Geolocator.getPositionStream(locationSettings: locationSettings).listen(
-      (Position position) {
-        double rawSpeed = position.speed; // m/s
-        if (rawSpeed < 0.5) rawSpeed = 0.0;
-        double kmh = rawSpeed * 3.6 * _speedMultiplier;
+  void _initNativeGps() {
+    // دریافت سرعت از بستر نیتیو اندروید بدون نیاز به هیچ پکیج اضافی
+    platform.setMethodCallHandler((call) async {
+      if (call.method == 'onSpeedUpdate') {
+        final double speed = (call.arguments as num).toDouble();
         setState(() {
-          _currentSpeed = kmh;
+          _currentSpeed = speed * _speedMultiplier;
+          _isGpsActive = true;
         });
-      },
-      onError: (e) {
-        setState(() => _isGpsActive = false);
-      },
-    );
+      }
+    });
+
+    // درخواست شروع موقعیت‌یابی به لایه نیتیو
+    try {
+      platform.invokeMethod('startGps');
+    } catch (_) {}
   }
 
   @override
   void dispose() {
     _clockTimer.cancel();
-    _positionStream?.cancel();
+    _gpsMockTimer?.cancel();
     super.dispose();
   }
 
-  // اجرای برنامه‌های خارجی با اینتنت مستقیم و امن
+  // اجرای برنامه‌های مانیتور و سیستم اندروید
   Future<void> _openExternalApp(String actionType, {String? packageName}) async {
     try {
       await platform.invokeMethod('openApp', {
         'action': actionType,
         'package': packageName ?? '',
       });
-    } catch (_) {
-      // فال‌بک مستقیم با UrlLauncher در صورت نیاز
-      if (packageName != null && packageName.isNotEmpty) {
-        final uri = Uri.parse("android-app://$packageName");
-        if (await canLaunchUrl(uri)) {
-          await launchUrl(uri);
-        }
-      }
+    } catch (e) {
+      debugPrint("Action Error: $e");
     }
   }
 
@@ -181,7 +154,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       backgroundColor: Colors.blueGrey.shade800,
                     ),
                     icon: const Icon(Icons.location_on, color: Colors.cyanAccent),
-                    label: const Text('تنظیمات مکان اندروید'),
+                    label: const Text('تنظیمات موقعیت مکانی اندروید'),
                     onPressed: () => _openExternalApp('location_settings'),
                   ),
                 ],
@@ -265,10 +238,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: SafeArea(
         child: Row(
           children: [
-            // 1. سایدبار ناوبری عمودی (سمت چپ)
+            // ۱. سایدبار ناوبری عمودی (سمت چپ)
             _buildSidebar(),
 
-            // 2. ستون ۱: کارت مسیریاب نئونی
+            // ۲. ستون اول: کارت هوشمند مسیریاب
             Expanded(
               flex: 3,
               child: Padding(
@@ -277,7 +250,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
 
-            // 3. ستون ۲: سرعت‌سنج مرکزی HUD، آرم سایپا و نمای پشت تیبا ۲
+            // ۳. ستون دوم: سرعت‌سنج HUD نئونی، آرم سایپا و نمای پشت تیبا ۲
             Expanded(
               flex: 4,
               child: Padding(
@@ -286,7 +259,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
 
-            // 4. ستون ۳: موزیک پلیر و کارت اصلی ماشین تیبا ۲
+            // ۴. ستون سوم: موزیک‌پلیر فابریک و کارت خودرو تیبا ۲
             Expanded(
               flex: 3,
               child: Padding(
@@ -300,7 +273,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // نوار ابزار عمودی داک
   Widget _buildSidebar() {
     return Container(
       width: 72,
@@ -338,7 +310,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // کارت مسیریاب
   Widget _buildNavigationCard() {
     return Container(
       decoration: BoxDecoration(
@@ -428,12 +399,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // پنل مرکزی HUD
   Widget _buildCenterHud() {
     return Column(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        // کالیبراسیون و دنده‌ها
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -452,8 +421,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ],
         ),
-
-        // کیلومترشمار نئونی
         Column(
           children: [
             Text(
@@ -481,8 +448,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ],
         ),
-
-        // آرم نئونی سایپا
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
           decoration: BoxDecoration(
@@ -500,8 +465,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
         ),
-
-        // تصویر نمای پشت تیبا ۲ روی جاده نئونی
         Expanded(
           child: Image.asset(
             'tiba2_rear.png',
@@ -549,11 +512,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // پنل سمت راست (موزیک + عکس تیبا ۲)
   Widget _buildRightPanel() {
     return Column(
       children: [
-        // موزیک پلیر مستقیم فابریک
         Container(
           height: 120,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -606,7 +567,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        // عکس نمایشی خودروی تیبا ۲
         Expanded(
           child: Container(
             decoration: BoxDecoration(
