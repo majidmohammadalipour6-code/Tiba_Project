@@ -27,29 +27,41 @@ jobs:
 
       - name: Create and Setup Project
         run: |
-          # 1. ساخت پروژه تمیز اپلیکیشن اندروید
+          # 1. ساخت پروژه تمیز
           flutter create -t app --platforms=android --org com.tiba.launcher tiba_project
           cd tiba_project
 
-          # 2. تنظیم مستقیم نسخه SDK روی 35 در build.gradle برای هماهنگی با geolocator
-          sed -i 's/compileSdk = .*/compileSdk = 35/g' android/app/build.gradle
-          sed -i 's/targetSdk = .*/targetSdk = 35/g' android/app/build.gradle
-          sed -i 's/minSdk = .*/minSdk = 21/g' android/app/build.gradle
+          # 2. تزریق compileSdkVersion 35 به تمام پلاگین‌ها برای جلوگیری از ارور geolocator
+          cat << 'EOF' >> android/build.gradle
 
-          # 3. تعریف متغیر flutter برای پلاگین‌های قدیمی‌تر گریدل
-          sed -i '/android {/a \    flutter { compileSdkVersion 35 }' android/app/build.gradle
+          subprojects {
+              afterEvaluate { project ->
+                  if (project.hasProperty('android')) {
+                      project.android {
+                          compileSdkVersion 35
+                          if (project.android.hasProperty('compileOptions')) {
+                              compileOptions {
+                                  sourceCompatibility JavaVersion.VERSION_17
+                                  targetCompatibility JavaVersion.VERSION_17
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
 
-          # 4. کپی فایل‌های اختصاصی شما
+          # 3. کپی فایل‌های پروژه شما
           cp ../lib/main.dart lib/main.dart
           cp ../pubspec.yaml pubspec.yaml
           if [ -f ../tiba2.png ]; then
             cp ../tiba2.png tiba2.png
           fi
 
-          # 5. افزودن تگ‌های لانچر خودرو به AndroidManifest
+          # 4. افزودن تگ‌های لانچر خودرو به AndroidManifest
           sed -i '/<category android:name="android.intent.category.LAUNCHER"\/>/a \                <category android:name="android.intent.category.HOME"\/>\n                <category android:name="android.intent.category.DEFAULT"\/>' android/app/src/main/AndroidManifest.xml
 
-          # 6. دریافت وابستگی‌ها
+          # 5. دریافت وابستگی‌ها
           flutter pub get
 
       - name: Build APK
