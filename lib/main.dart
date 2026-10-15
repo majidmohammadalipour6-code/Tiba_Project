@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -41,22 +40,20 @@ class CyberHudDashboard extends StatefulWidget {
 }
 
 class _CyberHudDashboardState extends State<CyberHudDashboard> with TickerProviderStateMixin {
-  // Theme & Customization
+  static const platform = MethodChannel('samples.flutter.dev/battery'); // Standard channel fallback
+
   Color _themeColor = const Color(0xFF00F0FF);
   double _glowIntensity = 0.8;
   double _speedMultiplier = 1.0;
 
-  // Car telemetry
   double _currentSpeed = 0.0;
   bool _isAccelerating = false;
   Timer? _speedTimer;
 
-  // Navigation state
   String _selectedNavApp = 'نشان (Neshan)';
   int _roadAnimTick = 0;
   late Timer _roadTimer;
 
-  // Clock
   String _currentTime = '';
   String _currentDate = '';
   late Timer _clockTimer;
@@ -136,33 +133,29 @@ class _CyberHudDashboardState extends State<CyberHudDashboard> with TickerProvid
     });
   }
 
-  // Safe Android Intent Launchers
-  Future<void> _openAndroidSettings() async {
+  // Native Android Intent Launcher via Platform Channel
+  Future<void> _sendAndroidIntent(String action, {String? packageName}) async {
     try {
-      const intentUrl = 'intent://#Intent;action=android.settings.SETTINGS;end;';
-      if (await canLaunchUrl(Uri.parse(intentUrl))) {
-        await launchUrl(Uri.parse(intentUrl));
-      } else {
-        // Fallback generic intent
-        await launchUrl(Uri.parse('content://settings/system'));
-      }
+      const MethodChannel channel = MethodChannel('tiba.launcher/intent');
+      await channel.invokeMethod('launchIntent', {
+        'action': action,
+        'package': packageName,
+      });
     } catch (e) {
-      debugPrint('Error opening settings: $e');
+      debugPrint('Intent error: $e');
     }
   }
 
-  Future<void> _openAppByAction(String action) async {
-    try {
-      String intentUrl = 'intent://#Intent;action=$action;end;';
-      if (action == 'android.intent.action.DIAL') {
-        intentUrl = 'intent://#Intent;action=android.intent.action.DIAL;end;';
-      } else if (action == 'android.intent.action.MUSIC_PLAYER') {
-        intentUrl = 'intent://#Intent;action=android.intent.action.MUSIC_PLAYER;end;';
-      }
-      await launchUrl(Uri.parse(intentUrl));
-    } catch (e) {
-      debugPrint('Error launching action $action: $e');
-    }
+  Future<void> _openAndroidSettings() async {
+    await _sendAndroidIntent('android.settings.SETTINGS');
+  }
+
+  Future<void> _openDialer() async {
+    await _sendAndroidIntent('android.intent.action.DIAL');
+  }
+
+  Future<void> _openMusicPlayer() async {
+    await _sendAndroidIntent('android.intent.action.MUSIC_PLAYER');
   }
 
   Future<void> _openNavigationApp() async {
@@ -170,16 +163,7 @@ class _CyberHudDashboardState extends State<CyberHudDashboard> with TickerProvid
     if (_selectedNavApp.contains('بلد')) pkg = 'ir.map.balad';
     if (_selectedNavApp.contains('گوگل')) pkg = 'com.google.android.apps.maps';
 
-    try {
-      final uri = Uri.parse('android-app://$pkg');
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri);
-      } else {
-        await launchUrl(Uri.parse('https://maps.google.com'));
-      }
-    } catch (e) {
-      debugPrint('Navigation open error: $e');
-    }
+    await _sendAndroidIntent('android.intent.action.VIEW', packageName: pkg);
   }
 
   void _showSettingsDialog() {
@@ -205,11 +189,11 @@ class _CyberHudDashboardState extends State<CyberHudDashboard> with TickerProvid
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        _colorButton(const Color(0xFF00F0FF), setDialogState), // Cyan
-                        _colorButton(const Color(0xFF00FF66), setDialogState), // Green
-                        _colorButton(const Color(0xFFFF0055), setDialogState), // Pink
-                        _colorButton(const Color(0xFFFFB700), setDialogState), // Amber
-                        _colorButton(const Color(0xFF9D4EDD), setDialogState), // Purple
+                        _colorButton(const Color(0xFF00F0FF), setDialogState),
+                        _colorButton(const Color(0xFF00FF66), setDialogState),
+                        _colorButton(const Color(0xFFFF0055), setDialogState),
+                        _colorButton(const Color(0xFFFFB700), setDialogState),
+                        _colorButton(const Color(0xFF9D4EDD), setDialogState),
                       ],
                     ),
                     const SizedBox(height: 20),
@@ -282,11 +266,11 @@ class _CyberHudDashboardState extends State<CyberHudDashboard> with TickerProvid
 
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: RadialGradient(
             center: Alignment.center,
             radius: 1.2,
-            colors: [const Color(0xFF0A1128), const Color(0xFF030712)],
+            colors: [Color(0xFF0A1128), Color(0xFF030712)],
           ),
         ),
         child: SafeArea(
@@ -294,26 +278,23 @@ class _CyberHudDashboardState extends State<CyberHudDashboard> with TickerProvid
             padding: const EdgeInsets.all(12.0),
             child: Column(
               children: [
-                // Top Status Bar
                 _buildTopBar(),
                 const SizedBox(height: 10),
-                // Main Dashboard Body
                 Expanded(
                   child: Row(
                     children: [
-                      // Left Panel: Tiba 2 Sport Image (Large on Left)
-                      _buildLeftCarPanel(),
+                      // Left Panel (Other controls/widgets)
+                      _buildLeftControlPanel(),
                       const SizedBox(width: 10),
-                      // Center Panel: Speedometer, Saipa Neon Logo, Rear Image & Road
+                      // Center Panel (Speedometer, Saipa logo, rear car, road)
                       Expanded(flex: 3, child: _buildCenterSpeedometer(calibratedSpeed)),
                       const SizedBox(width: 10),
-                      // Right Panel: Navigation & Media
-                      _buildRightPanel(),
+                      // Right Panel: Large Tiba 2 Sport Image + Nav/Media
+                      _buildRightCarAndMediaPanel(),
                     ],
                   ),
                 ),
                 const SizedBox(height: 10),
-                // Bottom Dock
                 _buildBottomDock(),
               ],
             ),
@@ -376,7 +357,7 @@ class _CyberHudDashboardState extends State<CyberHudDashboard> with TickerProvid
     );
   }
 
-  Widget _buildLeftCarPanel() {
+  Widget _buildLeftControlPanel() {
     return Expanded(
       flex: 2,
       child: Container(
@@ -389,31 +370,25 @@ class _CyberHudDashboardState extends State<CyberHudDashboard> with TickerProvid
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('سايپا تيابا ۲', style: TextStyle(color: _themeColor, fontWeight: FontWeight.bold, fontSize: 15)),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: _themeColor.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: _themeColor, width: 0.8),
-                  ),
-                  child: const Text('TIBA 2 SPORT', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
+            Text('وضعیت سیستم', style: TextStyle(color: _themeColor, fontWeight: FontWeight.bold, fontSize: 15)),
             const SizedBox(height: 10),
             Expanded(
               child: Container(
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.3),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: _themeColor.withOpacity(0.3)),
-                  image: const DecorationImage(
-                    image: AssetImage('tiba2.png'),
-                    fit: BoxFit.cover,
-                  ),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.speed, color: _themeColor, size: 36),
+                    const SizedBox(height: 10),
+                    const Text('کالیبراسیون هوشمند GPS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                    const SizedBox(height: 6),
+                    Text('برای تنظیم دقیق ضریب سرعت و رفع پرش، از دکمه تنظیمات نئون استفاده کنید.', style: TextStyle(fontSize: 10, color: Colors.grey[400]), textAlign: TextAlign.center),
+                  ],
                 ),
               ),
             ),
@@ -452,17 +427,14 @@ class _CyberHudDashboardState extends State<CyberHudDashboard> with TickerProvid
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Speedometer Dial Painter
           CustomPaint(
             size: const Size(double.infinity, double.infinity),
             painter: CyberSpeedometerPainter(speed: speed, themeColor: _themeColor),
           ),
-          // Center speed value & Saipa Neon Logo & Rear Car Image
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const SizedBox(height: 10),
-              // Saipa Neon Logo under speed number
               CustomPaint(
                 size: const Size(40, 40),
                 painter: SaipaNeonLogoPainter(color: _themeColor),
@@ -479,7 +451,6 @@ class _CyberHudDashboardState extends State<CyberHudDashboard> with TickerProvid
               ),
               const Text('KM / H', style: TextStyle(fontSize: 10, letterSpacing: 2, color: Colors.grey)),
               const Spacer(),
-              // Rear Car image (tiba2_rear.png) + Animated Road
               SizedBox(
                 height: 90,
                 child: Stack(
@@ -506,7 +477,6 @@ class _CyberHudDashboardState extends State<CyberHudDashboard> with TickerProvid
               ),
             ],
           ),
-          // Gas pedal simulation tap area
           Positioned(
             bottom: 10,
             right: 10,
@@ -529,15 +499,60 @@ class _CyberHudDashboardState extends State<CyberHudDashboard> with TickerProvid
     );
   }
 
-  Widget _buildRightPanel() {
+  Widget _buildRightCarAndMediaPanel() {
     return Expanded(
       flex: 2,
       child: Column(
         children: [
+          // Tiba 2 Sport Large Image Card (Right Side)
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0B132B).withOpacity(0.6),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: _themeColor.withOpacity(0.4), width: 1.5),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('سايپا تيابا ۲', style: TextStyle(color: _themeColor, fontWeight: FontWeight.bold, fontSize: 13)),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: _themeColor.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: _themeColor, width: 0.8),
+                        ),
+                        child: const Text('TIBA 2 SPORT', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: _themeColor.withOpacity(0.3)),
+                        image: const DecorationImage(
+                          image: AssetImage('tiba2.png'),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           // Navigation Card
           Expanded(
             child: Container(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: const Color(0xFF0B132B).withOpacity(0.6),
                 borderRadius: BorderRadius.circular(16),
@@ -551,9 +566,9 @@ class _CyberHudDashboardState extends State<CyberHudDashboard> with TickerProvid
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.navigation, color: _themeColor, size: 18),
-                          const SizedBox(width: 6),
-                          Text('مسیریاب: $_selectedNavApp', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          Icon(Icons.navigation, color: _themeColor, size: 16),
+                          const SizedBox(width: 4),
+                          Text('مسیریاب: $_selectedNavApp', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         ],
                       ),
                       GestureDetector(
@@ -570,17 +585,17 @@ class _CyberHudDashboardState extends State<CyberHudDashboard> with TickerProvid
                           });
                         },
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                           decoration: BoxDecoration(
                             border: Border.all(color: _themeColor),
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(4),
                           ),
-                          child: const Text('تغییر', style: TextStyle(fontSize: 10)),
+                          child: const Text('تغییر', style: TextStyle(fontSize: 9)),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   Expanded(
                     child: GestureDetector(
                       onTap: _openNavigationApp,
@@ -588,7 +603,7 @@ class _CyberHudDashboardState extends State<CyberHudDashboard> with TickerProvid
                         width: double.infinity,
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.4),
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: _themeColor.withOpacity(0.3)),
                         ),
                         child: Stack(
@@ -601,94 +616,13 @@ class _CyberHudDashboardState extends State<CyberHudDashboard> with TickerProvid
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.touch_app, color: _themeColor, size: 18),
-                                const SizedBox(width: 6),
-                                Text('لمس برای باز کردن نقشه', style: TextStyle(fontSize: 11, color: _themeColor)),
+                                Icon(Icons.touch_app, color: _themeColor, size: 16),
+                                const SizedBox(width: 4),
+                                Text('لمس برای باز کردن نقشه', style: TextStyle(fontSize: 10, color: _themeColor)),
                               ],
                             ),
                           ],
                         ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          // Media Player Card
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0B132B).withOpacity(0.6),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: _themeColor.withOpacity(0.4), width: 1.5),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.music_note, color: _themeColor, size: 18),
-                          const SizedBox(width: 6),
-                          const Text('سیستم صوتی', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                      GestureDetector(
-                        onTap: () => _openAppByAction('android.intent.action.MUSIC_PLAYER'),
-                        child: Text('باز کردن پلیر', style: TextStyle(fontSize: 10, color: _themeColor)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.4),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: _themeColor.withOpacity(0.3)),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: _themeColor.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: _themeColor),
-                            ),
-                            child: Icon(Icons.audiotrack, color: _themeColor, size: 20),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('آهنگ‌های دستگاه', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                const SizedBox(height: 2),
-                                Text('پخش از حافظه یا فلش', style: TextStyle(fontSize: 10, color: Colors.grey[400])),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.skip_previous, size: 20),
-                            onPressed: () {},
-                          ),
-                          IconButton(
-                            icon: Icon(Icons.play_arrow, color: _themeColor, size: 22),
-                            onPressed: () => _openAppByAction('android.intent.action.MUSIC_PLAYER'),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.skip_next, size: 20),
-                            onPressed: () {},
-                          ),
-                        ],
                       ),
                     ),
                   ),
@@ -703,7 +637,7 @@ class _CyberHudDashboardState extends State<CyberHudDashboard> with TickerProvid
 
   Widget _buildBottomDock() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       decoration: BoxDecoration(
         color: const Color(0xFF0B132B).withOpacity(0.7),
         borderRadius: BorderRadius.circular(16),
@@ -713,8 +647,8 @@ class _CyberHudDashboardState extends State<CyberHudDashboard> with TickerProvid
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _dockItem(Icons.map, 'نقشه', _openNavigationApp),
-          _dockItem(Icons.radio, 'رادیو', () => _openAppByAction('android.intent.action.MAIN')),
-          _dockItem(Icons.phone, 'تماس', () => _openAppByAction('android.intent.action.DIAL')),
+          _dockItem(Icons.radio, 'رادیو', _openMusicPlayer),
+          _dockItem(Icons.phone, 'تماس', _openDialer),
           _dockItem(Icons.apps, 'برنامه‌ها', _openAndroidSettings),
           _dockItem(Icons.tune, 'نورپردازی', _showSettingsDialog),
         ],
@@ -765,14 +699,12 @@ class CyberSpeedometerPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
 
-    // Draw gauge arc (from 135 deg to 405 deg -> 270 degree sweep)
     const startAngle = math.pi * 0.75;
     const sweepAngle = math.pi * 1.5;
 
     canvas.drawArc(Rect.fromCircle(center: center, radius: radius), startAngle, sweepAngle, false, paintGlow);
     canvas.drawArc(Rect.fromCircle(center: center, radius: radius), startAngle, sweepAngle, false, paintArc);
 
-    // Ticks and Numbers
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
     for (int i = 0; i <= 240; i += 20) {
       double angle = startAngle + (i / 240.0) * sweepAngle;
@@ -807,7 +739,6 @@ class CyberSpeedometerPainter extends CustomPainter {
       oldDelegate.speed != speed || oldDelegate.themeColor != themeColor;
 }
 
-// Saipa Neon Logo Painter
 class SaipaNeonLogoPainter extends CustomPainter {
   final Color color;
   SaipaNeonLogoPainter({required this.color});
@@ -825,7 +756,6 @@ class SaipaNeonLogoPainter extends CustomPainter {
       ..color = color.withOpacity(0.3)
       ..style = PaintingStyle.fill;
 
-    // Diamond / Saipa stylized badge shape
     final path = Path()
       ..moveTo(center.dx, center.dy - 14)
       ..lineTo(center.dx + 14, center.dy)
@@ -836,7 +766,6 @@ class SaipaNeonLogoPainter extends CustomPainter {
     canvas.drawPath(path, fillPaint);
     canvas.drawPath(path, paint);
 
-    // Inner lines for Saipa bird/logo motif
     final innerPath = Path()
       ..moveTo(center.dx, center.dy - 8)
       ..lineTo(center.dx + 6, center.dy)
@@ -850,7 +779,6 @@ class SaipaNeonLogoPainter extends CustomPainter {
   bool shouldRepaint(covariant SaipaNeonLogoPainter oldDelegate) => oldDelegate.color != color;
 }
 
-// Animated Road under rear car
 class AnimatedRoadPainter extends CustomPainter {
   final int tick;
   final Color themeColor;
@@ -865,7 +793,6 @@ class AnimatedRoadPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
 
-    // Perspective road lines moving
     double w = size.width;
     double h = size.height;
 
@@ -877,14 +804,12 @@ class AnimatedRoadPainter extends CustomPainter {
 
     canvas.drawPath(roadPath, paint);
 
-    // Center dashed moving line
     final dashPaint = Paint()
       ..color = Colors.white
       ..strokeWidth = 1.5;
 
     double offset = (tick * 1.5) % 15;
     for (double y = offset; y < h; y += 15) {
-      double progressFactor = y / h;
       double x = w * 0.5;
       canvas.drawLine(Offset(x, y), Offset(x, y + 6), dashPaint);
     }
@@ -895,7 +820,6 @@ class AnimatedRoadPainter extends CustomPainter {
       oldDelegate.tick != tick || oldDelegate.themeColor != themeColor;
 }
 
-// Navigation Road Painter for map preview card
 class NavigationRoadPainter extends CustomPainter {
   final Color themeColor;
   final double roadProgress;
