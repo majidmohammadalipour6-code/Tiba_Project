@@ -1,15 +1,14 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.landscapeLeft,
     DeviceOrientation.landscapeRight,
   ]);
-  SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   runApp(const TibaLauncherApp());
 }
 
@@ -24,411 +23,631 @@ class TibaLauncherApp extends StatelessWidget {
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF070B14),
       ),
-      home: const DashboardScreen(),
+      home: const CyberDashboard(),
     );
   }
 }
 
-class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+class CyberDashboard extends StatefulWidget {
+  const CyberDashboard({super.key});
 
   @override
-  State<DashboardScreen> createState() => _DashboardScreenState();
+  State<CyberDashboard> createState() => _CyberDashboardState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProviderStateMixin {
+class _CyberDashboardState extends State<CyberDashboard>
+    with SingleTickerProviderStateMixin {
   static const platform = MethodChannel('com.tiba2.launcher/actions');
 
-  double currentSpeed = 0.0;
-  String selectedGear = 'D';
-  bool isPlaying = false;
-  String currentTrack = 'در حال پخش نیست';
+  double _speed = 0.0;
+  double _calibration = 1.0;
+  String _selectedGear = 'D';
+  String _selectedNavName = 'نشان (Neshan)';
+  String _selectedNavPackage = 'org.neshan.maps.and.navi';
+  bool _isPlaying = false;
+  late Timer _timer;
+  String _timeStr = '';
+  String _dateStr = '';
 
-  late AnimationController _roadAnimController;
-  Timer? _clockTimer;
-  String _currentTime = "";
+  // کنترلر انیمیشن جاده در حال حرکت
+  late AnimationController _roadAnimCtrl;
 
   @override
   void initState() {
     super.initState();
-    _roadAnimController = AnimationController(
+    _updateClock();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _updateClock());
+
+    // لوپ بی‌نهایت انیمیشن جاده نئونی
+    _roadAnimCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1000),
+      duration: const Duration(milliseconds: 900),
     )..repeat();
 
-    _updateClock();
-    _requestGps();
-  }
-
-  void _updateClock() {
-    _clockTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      final now = DateTime.now();
-      if (mounted) {
+    // هندل سرعت از سمت پلتفرم
+    platform.setMethodCallHandler((call) async {
+      if (call.method == 'onSpeed') {
+        final val = (call.arguments as num).toDouble();
         setState(() {
-          _currentTime = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+          _speed = val * _calibration;
+          // تغییر پویای سرعت جاده بر اساس کیلومتر
+          int dur = 900;
+          if (_speed > 10) {
+            dur = (30000 / _speed).clamp(180, 800).toInt();
+          }
+          _roadAnimCtrl.duration = Duration(milliseconds: dur);
+          if (!_roadAnimCtrl.isAnimating) _roadAnimCtrl.repeat();
         });
       }
     });
+
+    // درخواست دسترسی به موقعیت مکانی (GPS) در زمان اجرای برنامه
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _execute('request_location');
+    });
   }
 
-  Future<void> _requestGps() async {
-    try {
-      await platform.invokeMethod('call', {'action': 'location_settings'});
-    } catch (_) {}
-  }
-
-  Future<void> _callNative(String action, {String pkg = ""}) async {
-    try {
-      await platform.invokeMethod('call', {'action': action, 'pkg': pkg});
-    } catch (_) {}
+  void _updateClock() {
+    final now = DateTime.now();
+    setState(() {
+      _timeStr =
+          "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+      _dateStr =
+          "${now.year}/${now.month.toString().padLeft(2, '0')}/${now.day.toString().padLeft(2, '0')}";
+    });
   }
 
   @override
   void dispose() {
-    _roadAnimController.dispose();
-    _clockTimer?.cancel();
+    _timer.cancel();
+    _roadAnimCtrl.dispose();
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Row(
-        children: [
-          // ستون ۱: سایدبار داک سمت چپ
-          _buildDock(),
-
-          // ستون ۲: کارت ناوبری و مسیریاب
-          Expanded(flex: 3, child: _buildNavCard()),
-
-          // ستون ۳: سرعت‌سنج HUD، آرم سایپا، جاده متحرک و نمای پشت تیبا
-          Expanded(flex: 4, child: _buildCenterSpeedoHUD()),
-
-          // ستون ۴: عکس خودرو تیبا ۲ و موزیک پلیر
-          Expanded(flex: 3, child: _buildRightMediaPanel()),
-        ],
-      ),
-    );
+  void _execute(String action, {String? pkg}) {
+    platform.invokeMethod('open', {'action': action, 'pkg': pkg ?? ''});
   }
 
-  Widget _buildDock() {
-    return Container(
-      width: 75,
-      decoration: BoxDecoration(
-        color: const Color(0xFF0C1322),
-        border: Border(right: BorderSide(color: Colors.cyan.withOpacity(0.2))),
+  void _openNavSelector() {
+    final apps = [
+      {'name': 'نشان (Neshan)', 'pkg': 'org.neshan.maps.and.navi'},
+      {'name': 'بلد (Balad)', 'pkg': 'ir.balad.navigation'},
+      {'name': 'Google Maps', 'pkg': 'com.google.android.apps.maps'},
+      {'name': 'Waze', 'pkg': 'com.waze'},
+    ];
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF0F172A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          Text(_currentTime, style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 13)),
-          _dockIcon(Icons.settings, "تنظیمات", () => _callNative("settings")),
-          _dockIcon(Icons.navigation_outlined, "مسیریاب", () => _callNative("nav", pkg: "ir.balad.app")),
-          _dockIcon(Icons.music_note, "موزیک", () => _callNative("music")),
-          _dockIcon(Icons.radio, "رادیو", () => _callNative("radio")),
-          _dockIcon(Icons.phone, "تماس", () => _callNative("phone")),
-          _dockIcon(Icons.apps, "برنامه‌ها", () => _callNative("apps")),
-        ],
-      ),
-    );
-  }
-
-  Widget _dockIcon(IconData icon, String label, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      builder: (_) => Container(
+        padding: const EdgeInsets.all(20),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: Colors.cyanAccent, size: 22),
-            const SizedBox(height: 2),
-            Text(label, style: const TextStyle(color: Colors.white60, fontSize: 9)),
+            const Text(
+              'انتخاب اپلیکیشن مسیریاب',
+              style: TextStyle(
+                color: Colors.cyanAccent,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const Divider(color: Colors.white24, height: 24),
+            ...apps.map(
+              (a) => ListTile(
+                leading: const Icon(Icons.navigation, color: Colors.cyanAccent),
+                title: Text(a['name']!, style: const TextStyle(color: Colors.white)),
+                trailing: _selectedNavPackage == a['pkg']
+                    ? const Icon(Icons.check_circle, color: Colors.cyanAccent)
+                    : null,
+                onTap: () {
+                  setState(() {
+                    _selectedNavName = a['name']!;
+                    _selectedNavPackage = a['pkg']!;
+                  });
+                  Navigator.pop(context);
+                },
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildNavCard() {
-    return Container(
-      margin: const EdgeInsets.all(8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0E1726),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.cyan.withOpacity(0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Row(
+  void _openGpsDialog() {
+    double temp = _calibration;
+    showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setSt) => AlertDialog(
+          backgroundColor: const Color(0xFF0F172A),
+          title: const Text(
+            'تنظیم و کالیبراسیون GPS',
+            style: TextStyle(color: Colors.cyanAccent),
+            textAlign: TextAlign.center,
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.near_me, color: Colors.cyanAccent, size: 16),
-              SizedBox(width: 6),
-              Text("ناوبری ماهواره‌ای", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+              Text(
+                'ضریب اصلاح سرعت: ${temp.toStringAsFixed(2)}x',
+                style: const TextStyle(color: Colors.white70),
+              ),
+              Slider(
+                value: temp,
+                min: 0.8,
+                max: 1.2,
+                divisions: 40,
+                activeColor: Colors.cyanAccent,
+                onChanged: (v) => setSt(() => temp = v),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1E293B),
+                ),
+                icon: const Icon(Icons.location_on, color: Colors.cyanAccent),
+                label: const Text('تنظیمات موقعیت مکانی اندروید'),
+                onPressed: () => _execute('location_settings'),
+              ),
             ],
           ),
-          const Spacer(),
-          Center(
-            child: InkWell(
-              onTap: () => _callNative("nav", pkg: "ir.balad.app"),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  gradient: LinearGradient(colors: [Colors.cyan.withOpacity(0.3), Colors.blue.withOpacity(0.1)]),
-                  border: Border.all(color: Colors.cyanAccent),
-                ),
-                child: const Column(
-                  children: [
-                    Icon(Icons.map_outlined, color: Colors.cyanAccent, size: 36),
-                    SizedBox(height: 6),
-                    Text("ورود به مسیریاب", style: TextStyle(color: Colors.white, fontSize: 11)),
-                  ],
-                ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('انصراف', style: TextStyle(color: Colors.white54)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.cyan),
+              onPressed: () {
+                setState(() => _calibration = temp);
+                Navigator.pop(context);
+              },
+              child: const Text('ذخیره', style: TextStyle(color: Colors.black)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Row(
+          children: [
+            // ۱. سایدبار داک سمت چپ
+            _buildDock(),
+
+            // ۲. ستون اول: کارت ناوبری و ساعت
+            Expanded(
+              flex: 3,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: _buildNavigationCard(),
               ),
             ),
+
+            // ۳. ستون دوم: کیلومتر نئونی، آرم سایپا، جاده متحرک و نمای پشت تیبا
+            Expanded(
+              flex: 4,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: _buildCenterCluster(),
+              ),
+            ),
+
+            // ۴. ستون سوم: کنترل موزیک و تصویر بدنه تیبا ۲
+            Expanded(
+              flex: 3,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: _buildRightSide(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDock() {
+    return Container(
+      width: 76,
+      margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F172A).withOpacity(0.9),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.cyanAccent.withOpacity(0.25)),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.settings, color: Colors.cyanAccent, size: 28),
+            onPressed: () => _execute('settings'),
           ),
-          const Spacer(),
+          IconButton(
+            icon: const Icon(Icons.map, color: Colors.cyanAccent, size: 28),
+            onPressed: () => _execute('nav', pkg: _selectedNavPackage),
+          ),
+          IconButton(
+            icon: const Icon(Icons.radio, color: Colors.cyanAccent, size: 28),
+            onPressed: () => _execute('radio'),
+          ),
+          IconButton(
+            icon: const Icon(Icons.phone, color: Colors.cyanAccent, size: 28),
+            onPressed: () => _execute('phone'),
+          ),
+          IconButton(
+            icon: const Icon(Icons.apps, color: Colors.cyanAccent, size: 28),
+            onPressed: () => _execute('apps'),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildCenterSpeedoHUD() {
+  Widget _buildNavigationCard() {
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF0A101D),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.cyan.withOpacity(0.2)),
+        color: const Color(0xFF0D1527),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: Colors.cyanAccent.withOpacity(0.25)),
+        boxShadow: [
+          BoxShadow(color: Colors.cyanAccent.withOpacity(0.05), blurRadius: 20)
+        ],
       ),
-      child: Stack(
-        alignment: Alignment.center,
+      padding: const EdgeInsets.all(18),
+      child: Column(
         children: [
-          // جاده نئونی متحرک
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: 120,
-            child: AnimatedBuilder(
-              animation: _roadAnimController,
-              builder: (context, child) {
-                return CustomPaint(
-                  painter: CyberRoadPainter(progress: _roadAnimController.value),
-                );
-              },
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.tune, color: Colors.cyanAccent),
+                onPressed: _openNavSelector,
+              ),
+              Row(
+                children: [
+                  Text(
+                    _selectedNavName,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  const Icon(Icons.near_me, color: Colors.cyanAccent, size: 20),
+                ],
+              ),
+            ],
+          ),
+          const Spacer(),
+          GestureDetector(
+            onTap: () => _execute('nav', pkg: _selectedNavPackage),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(22),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.cyanAccent.withOpacity(0.1),
+                    border: Border.all(color: Colors.cyanAccent, width: 2),
+                  ),
+                  child: const Icon(Icons.navigation,
+                      color: Colors.cyanAccent, size: 42),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'مسیریابی هوشمند',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
           ),
+          const Spacer(),
+          Text(
+            _timeStr,
+            style: const TextStyle(
+              color: Colors.cyanAccent,
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 2,
+            ),
+          ),
+          Text(_dateStr,
+              style: const TextStyle(color: Colors.white38, fontSize: 12)),
+        ],
+      ),
+    );
+  }
 
-          // کیلومترشمار، نشان سایپا، خودرو و دنده‌ها
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                currentSpeed.toInt().toString(),
-                style: const TextStyle(
-                  fontSize: 54,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white,
-                  letterSpacing: -2,
-                ),
+  Widget _buildCenterCluster() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        // کالیبراسیون و دنده‌ها
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.satellite_alt,
+                  color: Colors.cyanAccent, size: 22),
+              onPressed: _openGpsDialog,
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F172A),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white12),
               ),
-              const Text(
-                "KM/H",
-                style: TextStyle(color: Colors.cyanAccent, fontSize: 11, letterSpacing: 2, fontWeight: FontWeight.bold),
-              ),
-
-              const SizedBox(height: 6),
-
-              // آرم سایپا
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.cyanAccent.withOpacity(0.5)),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Text(
-                  "S A I P A",
-                  style: TextStyle(color: Colors.cyanAccent, fontSize: 9, letterSpacing: 3, fontWeight: FontWeight.bold),
-                ),
-              ),
-
-              const SizedBox(height: 8),
-
-              // تصویر پشت تیبا ۲
-              SizedBox(
-                height: 85,
-                child: Image.asset(
-                  "tiba2_rear.png",
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Icon(Icons.directions_car, color: Colors.cyanAccent, size: 60),
-                ),
-              ),
-
-              // دنده‌ها
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: ['P', 'R', 'N', 'D'].map((gear) {
-                  bool isSelected = gear == selectedGear;
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: ['P', 'R', 'N', 'D'].map((g) {
+                  final sel = _selectedGear == g;
                   return GestureDetector(
-                    onTap: () => setState(() => selectedGear = gear),
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: isSelected ? Colors.cyanAccent : Colors.transparent,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: Colors.cyanAccent.withOpacity(0.5)),
-                      ),
+                    onTap: () => setState(() => _selectedGear = g),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
                       child: Text(
-                        gear,
+                        g,
                         style: TextStyle(
-                          color: isSelected ? Colors.black : Colors.white70,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 11,
+                          color: sel ? Colors.cyanAccent : Colors.white24,
+                          fontSize: 14,
+                          fontWeight:
+                              sel ? FontWeight.bold : FontWeight.normal,
                         ),
                       ),
                     ),
                   );
                 }).toList(),
               ),
+            ),
+            const SizedBox(width: 40),
+          ],
+        ),
+
+        // کیلومتر نئونی بزرگ
+        Column(
+          children: [
+            Text(
+              _speed.toInt().toString(),
+              style: const TextStyle(
+                color: Colors.cyanAccent,
+                fontSize: 80,
+                fontWeight: FontWeight.w900,
+                shadows: [Shadow(color: Colors.cyanAccent, blurRadius: 28)],
+              ),
+            ),
+            const Text(
+              'KM / H',
+              style: TextStyle(
+                color: Colors.white54,
+                fontSize: 13,
+                letterSpacing: 4,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+
+        // آرم نئونی سایپا
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
+          decoration: BoxDecoration(
+            color: Colors.cyanAccent.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.cyanAccent.withOpacity(0.3)),
+          ),
+          child: const Text(
+            'S A I P A',
+            style: TextStyle(
+              color: Colors.cyanAccent,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 4,
+            ),
+          ),
+        ),
+
+        // جاده متحرک سه‌بعدی نئونی با تصویر پشت تیبا روی آن
+        Expanded(
+          child: Stack(
+            alignment: Alignment.bottomCenter,
+            children: [
+              // جاده در حال حرکت
+              Positioned.fill(
+                child: AnimatedBuilder(
+                  animation: _roadAnimCtrl,
+                  builder: (context, child) {
+                    return CustomPaint(
+                      painter: MovingCyberRoadPainter(
+                        progress: _roadAnimCtrl.value,
+                      ),
+                    );
+                  },
+                ),
+              ),
+              // تصویر نمای پشت خودرو
+              Positioned(
+                bottom: 6,
+                child: SizedBox(
+                  height: 95,
+                  child: Image.asset(
+                    'tiba2_rear.png',
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Icon(
+                      Icons.directions_car,
+                      color: Colors.cyanAccent,
+                      size: 54,
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  Widget _buildRightMediaPanel() {
-    return Container(
-      margin: const EdgeInsets.all(8),
-      child: Column(
-        children: [
-          // تصویر اصلی تیبا ۲
-          Expanded(
-            flex: 5,
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0E1726),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.cyan.withOpacity(0.3)),
+  Widget _buildRightSide() {
+    return Column(
+      children: [
+        // کارت موزیک فابریک
+        Container(
+          height: 120,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0D1527),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: Colors.cyanAccent.withOpacity(0.2)),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.launch,
+                        color: Colors.cyanAccent, size: 20),
+                    onPressed: () => _execute('music'),
+                  ),
+                  const Text('پخش‌کننده خودرو',
+                      style: TextStyle(color: Colors.white70, fontSize: 13)),
+                ],
               ),
-              child: Center(
-                child: Image.asset(
-                  "tiba2.png",
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Icon(Icons.car_rental, color: Colors.cyanAccent, size: 70),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.skip_previous,
+                        color: Colors.cyanAccent),
+                    onPressed: () => _execute('media_prev'),
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      _isPlaying
+                          ? Icons.pause_circle_filled
+                          : Icons.play_circle_fill,
+                      color: Colors.cyanAccent,
+                      size: 38,
+                    ),
+                    onPressed: () {
+                      setState(() => _isPlaying = !_isPlaying);
+                      _execute('media_play_pause');
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.skip_next,
+                        color: Colors.cyanAccent),
+                    onPressed: () => _execute('media_next'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        // عکس نمایشی بدنه تیبا ۲
+        Expanded(
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF0D1527),
+              borderRadius: BorderRadius.circular(26),
+              border: Border.all(color: Colors.white10),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(26),
+              child: Image.asset(
+                'tiba2.png',
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Center(
+                  child: Icon(Icons.directions_car,
+                      color: Colors.white24, size: 50),
                 ),
               ),
             ),
           ),
-
-          const SizedBox(height: 8),
-
-          // کارت موزیک پلیر
-          Expanded(
-            flex: 5,
-            child: InkWell(
-              onTap: () => _callNative("music"),
-              borderRadius: BorderRadius.circular(16),
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0E1726),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.cyan.withOpacity(0.3)),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.music_note, color: Colors.cyanAccent, size: 16),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            currentTrack,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: Colors.white, fontSize: 11),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.skip_previous, color: Colors.cyanAccent),
-                          onPressed: () => _callNative("media_prev"),
-                        ),
-                        IconButton(
-                          icon: Icon(isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill, color: Colors.cyanAccent, size: 36),
-                          onPressed: () {
-                            setState(() => isPlaying = !isPlaying);
-                            _callNative("media_play_pause");
-                          },
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.skip_next, color: Colors.cyanAccent),
-                          onPressed: () => _callNative("media_next"),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-// نقاش جاده پرسپکتیو نئونی
-class CyberRoadPainter extends CustomPainter {
+/// نقاش سفارشی جاده پرسپکتیو نئونی در حال حرکت به جلو
+class MovingCyberRoadPainter extends CustomPainter {
   final double progress;
-  CyberRoadPainter({required this.progress});
+  MovingCyberRoadPainter({required this.progress});
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paintLine = Paint()
-      ..color = Colors.cyanAccent.withOpacity(0.4)
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
+    final w = size.width;
+    final h = size.height;
 
-    final paintGlow = Paint()
-      ..color = Colors.cyanAccent.withOpacity(0.15)
-      ..style = PaintingStyle.fill;
+    final roadPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Colors.cyanAccent.withOpacity(0.0),
+          Colors.cyanAccent.withOpacity(0.08),
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, w, h));
 
-    final path = Path()
-      ..moveTo(size.width * 0.40, 0)
-      ..lineTo(size.width * 0.1, size.height)
-      ..lineTo(size.width * 0.9, size.height)
-      ..lineTo(size.width * 0.60, 0)
+    // رسم کفی جاده ذوزنقه‌ای پرسپکتیو
+    final roadPath = Path()
+      ..moveTo(w * 0.36, 0)
+      ..lineTo(w * 0.64, 0)
+      ..lineTo(w * 0.90, h)
+      ..lineTo(w * 0.10, h)
       ..close();
-    canvas.drawPath(path, paintGlow);
+    canvas.drawPath(roadPath, roadPaint);
 
-    canvas.drawLine(Offset(size.width * 0.40, 0), Offset(size.width * 0.1, size.height), paintLine);
-    canvas.drawLine(Offset(size.width * 0.60, 0), Offset(size.width * 0.9, size.height), paintLine);
+    // حاشیه‌های نئونی چپ و راست جاده
+    final borderPaint = Paint()
+      ..color = Colors.cyanAccent.withOpacity(0.6)
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke
+      ..maskFilter = const MaskFilter.blur(BlurStyle.solid, 4);
 
-    for (int i = 0; i < 5; i++) {
-      double t = (i / 5.0 + progress) % 1.0;
-      double y = math.pow(t, 2) * size.height;
-      double leftX = (size.width * 0.40) - (size.width * 0.30 * t);
-      double rightX = (size.width * 0.60) + (size.width * 0.30 * t);
+    canvas.drawLine(Offset(w * 0.36, 0), Offset(w * 0.10, h), borderPaint);
+    canvas.drawLine(Offset(w * 0.64, 0), Offset(w * 0.90, h), borderPaint);
 
-      paintLine.color = Colors.cyanAccent.withOpacity(0.1 + (0.5 * t));
-      canvas.drawLine(Offset(leftX, y), Offset(rightX, y), paintLine);
+    // خطوط مقطع نئونی متحرک در مرکز جاده
+    final lanePaint = Paint()
+      ..color = Colors.cyanAccent.withOpacity(0.85)
+      ..strokeWidth = 2.0
+      ..maskFilter = const MaskFilter.blur(BlurStyle.solid, 3);
+
+    const int totalLines = 5;
+    for (int i = 0; i < totalLines; i++) {
+      double t = ((i / totalLines) + progress) % 1.0;
+      // تبدیل حرکت خطی به پرسپکتیو واقعی
+      double curveT = t * t;
+
+      double y = curveT * h;
+      double lineLength = 10 + (curveT * 35);
+      double endY = (y + lineLength).clamp(0.0, h);
+
+      canvas.drawLine(Offset(w * 0.5, y), Offset(w * 0.5, endY), lanePaint);
     }
   }
 
   @override
-  bool shouldRepaint(covariant CyberRoadPainter oldDelegate) => true;
+  bool shouldRepaint(covariant MovingCyberRoadPainter oldDelegate) {
+    return oldDelegate.progress != progress;
+  }
 }
