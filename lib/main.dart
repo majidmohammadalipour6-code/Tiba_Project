@@ -42,6 +42,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   double _currentSpeed = 0.0;
+  double _speedMultiplier = 1.0; // ضریب کالیبراسیون GPS
   StreamSubscription<Position>? _gpsSubscription;
 
   late Timer _clockTimer;
@@ -50,10 +51,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _dateString = "";
   double _roadOffset = 0.0;
 
-  bool _isPlaying = true;
-  final String _songTitle = "Shadmehr - Ghoroor";
-  final String _artistName = "Cyber Wave Mix";
-  final double _musicProgress = 0.45;
+  bool _isPlaying = false;
+  String _currentAppNav = "نشان";
 
   Color _neonThemeColor = const Color(0xFF00E5FF);
   double _neonGlowFactor = 1.0;
@@ -98,18 +97,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final prefs = await SharedPreferences.getInstance();
     final colorVal = prefs.getInt('neon_color');
     final glowVal = prefs.getDouble('neon_glow');
+    final savedNav = prefs.getString('preferred_nav');
+    final multVal = prefs.getDouble('speed_multiplier');
     if (colorVal != null) _neonThemeColor = Color(colorVal);
     if (glowVal != null) _neonGlowFactor = glowVal;
+    if (savedNav != null) _currentAppNav = savedNav;
+    if (multVal != null) _speedMultiplier = multVal;
     if (mounted) setState(() {});
   }
 
-  Future<void> _saveSettings(Color color, double glow) async {
+  Future<void> _saveNeonSettings(Color color, double glow, double multiplier) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('neon_color', color.value);
     await prefs.setDouble('neon_glow', glow);
+    await prefs.setDouble('speed_multiplier', multiplier);
     setState(() {
       _neonThemeColor = color;
       _neonGlowFactor = glow;
+      _speedMultiplier = multiplier;
     });
   }
 
@@ -145,16 +150,103 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ).listen((Position pos) {
         double raw = pos.speed;
         if (raw < 0 || raw.isNaN) raw = 0.0;
+        double calculatedSpeed = (raw * 3.6) * _speedMultiplier;
         setState(() {
-          _currentSpeed = (raw * 3.6).clamp(0.0, 240.0);
+          _currentSpeed = calculatedSpeed.clamp(0.0, 240.0);
         });
       });
     } catch (_) {}
   }
 
-  void _openSettingsDialog() {
+  void _openSystemSettings() {
+    _launchCustomIntent('android.settings.SETTINGS');
+  }
+
+  void _launchCustomIntent(String action, {String? category}) async {
+    try {
+      const platform = MethodChannel('plugins.flutter.io/android_intent');
+      await platform.invokeMethod('launch', {
+        'action': action,
+        if (category != null) 'category': category,
+      });
+    } catch (_) {
+      try {
+        await SystemNavigator.pop();
+      } catch (_) {}
+    }
+  }
+
+  void _launchAppPackage(String packageName) async {
+    try {
+      const platform = MethodChannel('plugins.flutter.io/android_intent');
+      await platform.invokeMethod('launch', {
+        'action': 'android.intent.action.MAIN',
+        'package': packageName,
+      });
+    } catch (_) {}
+  }
+
+  void _openRadio() {
+    _launchCustomIntent('android.intent.action.MAIN', category: 'android.intent.category.APP_MUSIC');
+  }
+
+  void _openPhone() {
+    _launchCustomIntent('android.intent.action.DIAL');
+  }
+
+  void _openAllApps() {
+    _launchCustomIntent('android.intent.action.ALL_APPS');
+  }
+
+  void _openMusicPlayer() {
+    _launchCustomIntent('android.intent.action.MUSIC_PLAYER');
+  }
+
+  void _showNavAppSelector() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF0A101D),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(color: _neonThemeColor.withOpacity(0.5)),
+        ),
+        title: Text(
+          "انتخاب اپلیکیشن مسیریاب",
+          textAlign: TextAlign.center,
+          style: TextStyle(color: _neonThemeColor, fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _navAppTile("نشان (Neshan)", "ir.resam.gis"),
+            _navAppTile("بلد (Balad)", "ir.balad.navigation"),
+            _navAppTile("Google Maps", "com.google.android.apps.maps"),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _navAppTile(String title, String pkg) {
+    return ListTile(
+      leading: Icon(Icons.navigation_outlined, color: _neonThemeColor),
+      title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 14)),
+      trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white30, size: 14),
+      onTap: () async {
+        Navigator.pop(context);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('preferred_nav', title);
+        setState(() => _currentAppNav = title);
+        _launchAppPackage(pkg);
+      },
+    );
+  }
+
+  void _openNeonSettingsDialog() {
     Color selectedColor = _neonThemeColor;
     double selectedGlow = _neonGlowFactor;
+    double selectedMultiplier = _speedMultiplier;
 
     showDialog(
       context: context,
@@ -167,62 +259,86 @@ class _DashboardScreenState extends State<DashboardScreen> {
               side: BorderSide(color: selectedColor.withOpacity(0.5)),
             ),
             title: Text(
-              'تنظیمات نئون و نورپردازی تیبا',
+              'تنظیمات و کالیبراسیون تیبا',
               textAlign: TextAlign.center,
               style: TextStyle(color: selectedColor, fontWeight: FontWeight.bold),
             ),
             content: SizedBox(
-              width: 380,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('طیف رنگی نئون:', style: TextStyle(color: Colors.white70)),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 12,
-                    children: _availableColors.map((c) {
-                      bool isSel = c.value == selectedColor.value;
-                      return GestureDetector(
-                        onTap: () => setDialogState(() => selectedColor = c),
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: c,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: isSel ? Colors.white : Colors.transparent,
-                              width: 3,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: c.withOpacity(0.7),
-                                blurRadius: isSel ? 14 : 4,
-                                spreadRadius: isSel ? 3 : 0,
+              width: 400,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('انتخاب رنگ نئون:', style: TextStyle(color: Colors.white70)),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 12,
+                      children: _availableColors.map((c) {
+                        bool isSel = c.value == selectedColor.value;
+                        return GestureDetector(
+                          onTap: () => setDialogState(() => selectedColor = c),
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: c,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isSel ? Colors.white : Colors.transparent,
+                                width: 3,
                               ),
-                            ],
+                              boxShadow: [
+                                BoxShadow(
+                                  color: c.withOpacity(0.7),
+                                  blurRadius: isSel ? 12 : 4,
+                                  spreadRadius: isSel ? 2 : 0,
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('شدت درخشش (Glow):', style: TextStyle(color: Colors.white70)),
-                      Text('${(selectedGlow * 100).toInt()}%', style: TextStyle(color: selectedColor)),
-                    ],
-                  ),
-                  Slider(
-                    value: selectedGlow,
-                    min: 0.3,
-                    max: 1.8,
-                    activeColor: selectedColor,
-                    inactiveColor: Colors.white24,
-                    onChanged: (val) => setDialogState(() => selectedGlow = val),
-                  ),
-                ],
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('شدت درخشش (Glow):', style: TextStyle(color: Colors.white70)),
+                        Text('${(selectedGlow * 100).toInt()}%', style: TextStyle(color: selectedColor)),
+                      ],
+                    ),
+                    Slider(
+                      value: selectedGlow,
+                      min: 0.3,
+                      max: 1.8,
+                      activeColor: selectedColor,
+                      inactiveColor: Colors.white24,
+                      onChanged: (val) => setDialogState(() => selectedGlow = val),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('کالیبره سرعت GPS (ضریب):', style: TextStyle(color: Colors.white70)),
+                        Text('${selectedMultiplier.toStringAsFixed(2)}x', style: TextStyle(color: selectedColor)),
+                      ],
+                    ),
+                    Slider(
+                      value: selectedMultiplier,
+                      min: 0.7,
+                      max: 1.4,
+                      divisions: 14,
+                      activeColor: selectedColor,
+                      inactiveColor: Colors.white24,
+                      onChanged: (val) => setDialogState(() => selectedMultiplier = val),
+                    ),
+                    const Text(
+                      'اگر سرعت GPS نوسان دارد یا اختلاف نشان می‌دهد، با این اسلایدر آن را تنظیم کنید.',
+                      style: TextStyle(color: Colors.white38, fontSize: 10),
+                    ),
+                  ],
+                ),
               ),
             ),
             actions: [
@@ -236,7 +352,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   side: BorderSide(color: selectedColor),
                 ),
                 onPressed: () {
-                  _saveSettings(selectedColor, selectedGlow);
+                  _saveNeonSettings(selectedColor, selectedGlow, selectedMultiplier);
                   Navigator.pop(ctx);
                 },
                 child: const Text('ذخیره تغییرات', style: TextStyle(color: Colors.white)),
@@ -271,17 +387,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
                   child: Row(
                     children: [
-                      Expanded(flex: 31, child: _buildNavigationCard(theme, glow)),
+                      // پنل سمت چپ: تصویر بزرگ و جذاب تیبا ۲
+                      Expanded(flex: 32, child: _buildCarShowcaseCard(theme, glow)),
                       const SizedBox(width: 14),
+                      // پنل مرکزی: سرعت‌شمار، آرم نئونی سایپا زیر آن و عکس پشت ماشین
                       Expanded(flex: 38, child: _buildSpeedometerCenter(theme, glow)),
                       const SizedBox(width: 14),
+                      // پنل سمت راست: مسیریاب و سیستم صوتی
                       Expanded(
-                        flex: 31,
+                        flex: 30,
                         child: Column(
                           children: [
-                            Expanded(flex: 48, child: _buildCarStatusCard(theme, glow)),
+                            Expanded(flex: 52, child: _buildNavigationCard(theme, glow)),
                             const SizedBox(height: 12),
-                            Expanded(flex: 52, child: _buildMusicCard(theme, glow)),
+                            Expanded(flex: 48, child: _buildMusicCard(theme, glow)),
                           ],
                         ),
                       ),
@@ -343,17 +462,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Icon(Icons.wifi, color: theme, size: 20),
               const SizedBox(width: 10),
               Icon(Icons.bluetooth, color: theme, size: 20),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               GestureDetector(
-                onTap: _openSettingsDialog,
+                onTap: _openSystemSettings,
                 child: Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.06),
-                    border: Border.all(color: theme.withOpacity(0.5)),
+                    color: Colors.white.withOpacity(0.08),
+                    border: Border.all(color: theme.withOpacity(0.6)),
                   ),
-                  child: Icon(Icons.settings, color: theme, size: 18),
+                  child: Icon(Icons.settings_suggest_rounded, color: theme, size: 20),
                 ),
               ),
             ],
@@ -387,7 +506,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildNavigationCard(Color theme, double glow) {
+  Widget _buildCarShowcaseCard(Color theme, double glow) {
     return _neonPanel(
       color: theme,
       glow: glow,
@@ -397,91 +516,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Icon(Icons.navigation_rounded, color: theme, size: 18),
-                  const SizedBox(width: 6),
-                  Text("مسیریاب زنده", style: TextStyle(color: theme, fontSize: 13, fontWeight: FontWeight.bold)),
-                ],
+              Text(
+                "سایپا تیبا ۲",
+                style: TextStyle(color: theme, fontSize: 13, fontWeight: FontWeight.bold),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: Colors.greenAccent.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(6),
+                  color: theme.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Text("GPS فعال", style: TextStyle(color: Colors.greenAccent, fontSize: 10)),
+                child: Text(
+                  "TIBA 2 SPORT",
+                  style: TextStyle(color: theme, fontSize: 9, fontWeight: FontWeight.bold),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  CustomPaint(
-                    painter: NavigationRoadPainter(
-                      themeColor: theme,
-                      roadProgress: _roadOffset,
-                    ),
-                  ),
-                  Positioned(
-                    top: 10,
-                    left: 10,
-                    right: 10,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.65),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: theme.withOpacity(0.3)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.turn_right_rounded, color: theme, size: 24),
-                          const SizedBox(width: 8),
-                          const Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text("۲۵۰ متر بعد، خروجی بزرگراه",
-                                    style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-                                Text("بزرگراه شهید ستاری جنوب",
-                                    style: TextStyle(color: Colors.white54, fontSize: 9)),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+            child: Center(
+              child: Image.asset(
+                'tiba2.png',
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) {
+                  return Icon(Icons.directions_car_filled, size: 100, color: theme);
+                },
               ),
             ),
           ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _navMetricItem("۸ دقیقه", "تا مقصد"),
-              _navMetricItem("۴.۲ km", "فاصله باقی‌مانده"),
-              _navMetricItem("۱۹:۴۵", "زمان رسیدن"),
-            ],
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+            decoration: BoxDecoration(
+              color: Colors.black38,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: theme.withOpacity(0.2)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                Text("طراحی اختصاصی مانیتور", style: TextStyle(color: Colors.white70, fontSize: 10)),
+                Icon(Icons.verified, color: theme, size: 14),
+              ],
+            ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _navMetricItem(String title, String subtitle) {
-    return Column(
-      children: [
-        Text(title, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 2),
-        Text(subtitle, style: const TextStyle(color: Colors.white38, fontSize: 9)),
-      ],
     );
   }
 
@@ -505,16 +586,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
           ),
+          // نمای پشت تیبا ۲ در پایین (tiba2_rear.png)
           Positioned(
-            bottom: 12,
+            bottom: 10,
             child: Image.asset(
-              'tiba2.png',
-              width: 175,
-              height: 105,
+              'tiba2_rear.png',
+              width: 165,
+              height: 95,
               fit: BoxFit.contain,
               errorBuilder: (context, error, stackTrace) {
-                return Icon(Icons.directions_car, size: 85, color: theme);
+                return Image.asset(
+                  'tiba2.png',
+                  width: 155,
+                  height: 85,
+                  fit: BoxFit.contain,
+                  errorBuilder: (ctx, err, st) => Icon(Icons.directions_car, size: 70, color: theme),
+                );
               },
+            ),
+          ),
+          // آرم نئونی سایپا دقیقاً زیر کیلومتر و بالای ماشین عقب
+          Positioned(
+            bottom: 110,
+            child: SizedBox(
+              width: 38,
+              height: 38,
+              child: CustomPaint(
+                painter: SaipaNeonLogoPainter(color: theme, glow: glow),
+              ),
             ),
           ),
           Positioned.fill(
@@ -527,17 +626,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
           Positioned(
-            top: 22,
-            child: SizedBox(
-              width: 44,
-              height: 44,
-              child: CustomPaint(
-                painter: SaipaNeonLogoPainter(color: theme, glow: glow),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 86,
+            top: 76,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -573,43 +662,77 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildCarStatusCard(Color theme, double glow) {
+  Widget _buildNavigationCard(Color theme, double glow) {
     return _neonPanel(
       color: theme,
       glow: glow,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text("وضعیت سیستم تیبا", style: TextStyle(color: theme, fontSize: 12, fontWeight: FontWeight.bold)),
-              Icon(Icons.check_circle_outline, color: theme, size: 16),
-            ],
-          ),
-          const Spacer(),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _carMetricWidget(Icons.local_gas_station, "بنزین", "۶۸٪", theme),
-              _carMetricWidget(Icons.speed, "باد لاستیک", "32 PSI", theme),
-              _carMetricWidget(Icons.thermostat, "دما", "۸۸°C", theme),
-            ],
-          ),
-          const Spacer(),
-        ],
+      child: InkWell(
+        onTap: _showNavAppSelector,
+        borderRadius: BorderRadius.circular(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.near_me_rounded, color: theme, size: 18),
+                    const SizedBox(width: 6),
+                    Text("مسیریاب: $_currentAppNav",
+                        style: TextStyle(color: theme, fontSize: 12, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: theme.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: theme.withOpacity(0.5)),
+                  ),
+                  child: const Text("تغییر", style: TextStyle(color: Colors.white, fontSize: 9)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    CustomPaint(
+                      painter: NavigationRoadPainter(
+                        themeColor: theme,
+                        roadProgress: _roadOffset,
+                      ),
+                    ),
+                    Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: theme.withOpacity(0.4)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.touch_app, color: theme, size: 16),
+                            const SizedBox(width: 6),
+                            const Text("لمس برای باز کردن نقشه",
+                                style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
-    );
-  }
-
-  Widget _carMetricWidget(IconData icon, String label, String value, Color color) {
-    return Column(
-      children: [
-        Icon(icon, color: color, size: 20),
-        const SizedBox(height: 4),
-        Text(value, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-        Text(label, style: const TextStyle(color: Colors.white38, fontSize: 9)),
-      ],
     );
   }
 
@@ -621,53 +744,58 @@ class _DashboardScreenState extends State<DashboardScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Icon(Icons.music_note, color: theme, size: 16),
-              const SizedBox(width: 4),
-              Text("سیستم صوتی", style: TextStyle(color: theme, fontSize: 11, fontWeight: FontWeight.bold)),
+              Row(
+                children: [
+                  Icon(Icons.music_note, color: theme, size: 16),
+                  const SizedBox(width: 4),
+                  Text("سیستم صوتی", style: TextStyle(color: theme, fontSize: 11, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              GestureDetector(
+                onTap: _openMusicPlayer,
+                child: Text("باز کردن پلیر", style: TextStyle(color: theme, fontSize: 9)),
+              ),
             ],
           ),
           const Spacer(),
           Row(
             children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: theme.withOpacity(0.5)),
-                  gradient: LinearGradient(
-                    colors: [theme.withOpacity(0.3), Colors.black],
+              GestureDetector(
+                onTap: _openMusicPlayer,
+                child: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: theme.withOpacity(0.5)),
+                    gradient: LinearGradient(
+                      colors: [theme.withOpacity(0.3), Colors.black],
+                    ),
                   ),
+                  child: Icon(Icons.music_video_rounded, color: theme, size: 24),
                 ),
-                child: Icon(Icons.album, color: theme, size: 28),
               ),
               const SizedBox(width: 10),
-              Expanded(
+              const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(_songTitle,
+                    Text("آهنگ‌های دستگاه",
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 2),
-                    Text(_artistName,
+                        style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                    SizedBox(height: 2),
+                    Text("پخش از حافظه یا فلش",
                         maxLines: 1,
-                        style: const TextStyle(color: Colors.white54, fontSize: 10)),
+                        style: TextStyle(color: Colors.white54, fontSize: 10)),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          LinearProgressIndicator(
-            value: _musicProgress,
-            backgroundColor: Colors.white12,
-            valueColor: AlwaysStoppedAnimation<Color>(theme),
-            minHeight: 3,
-          ),
-          const SizedBox(height: 6),
+          const Spacer(),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -677,7 +805,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 onPressed: () {},
               ),
               GestureDetector(
-                onTap: () => setState(() => _isPlaying = !_isPlaying),
+                onTap: () {
+                  setState(() => _isPlaying = !_isPlaying);
+                  _openMusicPlayer();
+                },
                 child: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
@@ -716,11 +847,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _dockButtonWidget(Icons.map, "نقشه", theme, () {}),
-          _dockButtonWidget(Icons.radio, "رادیو", theme, () {}),
-          _dockButtonWidget(Icons.phone, "تماس", theme, () {}),
-          _dockButtonWidget(Icons.apps, "برنامه‌ها", theme, () {}),
-          _dockButtonWidget(Icons.tune, "نورپردازی", theme, _openSettingsDialog),
+          _dockButtonWidget(Icons.map_rounded, "نقشه", theme, _showNavAppSelector),
+          _dockButtonWidget(Icons.radio_rounded, "رادیو", theme, _openRadio),
+          _dockButtonWidget(Icons.phone_in_talk_rounded, "تماس", theme, _openPhone),
+          _dockButtonWidget(Icons.apps_rounded, "برنامه‌ها", theme, _openAllApps),
+          _dockButtonWidget(Icons.tune_rounded, "نورپردازی", theme, _openNeonSettingsDialog),
         ],
       ),
     );
