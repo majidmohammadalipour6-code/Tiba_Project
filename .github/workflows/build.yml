@@ -28,7 +28,7 @@ jobs:
           # ساخت پروژه پایه با ساختار استاندارد
           flutter create --org com.tiba2 tiba_project
           cd tiba_project
-
+          flutter pub add geolocator:^13.0.2
           # کپی فایل رابط کاربری و تصاویر خودرو
           cp ../lib/main.dart lib/main.dart
           if [ -f "../tiba2.png" ]; then cp ../tiba2.png ./; fi
