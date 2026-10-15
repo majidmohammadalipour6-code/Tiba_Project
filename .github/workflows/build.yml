@@ -1,4 +1,4 @@
-name: Build Tiba Launcher APK
+name: Build Tiba Launcher
 
 on:
   push:
@@ -9,8 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -24,118 +23,131 @@ jobs:
           flutter-version: '3.24.0'
           channel: 'stable'
 
-      - name: Create Base Project
+      - name: Create and Build Project
         run: |
+          # ساخت پروژه پایه با ساختار استاندارد
           flutter create --org com.tiba2 tiba_project
           cd tiba_project
-          
-          # کپی فایل‌های اصلی و عکس‌ها
-          cp ../lib/main.dart lib/main.dart
-          [ -f ../tiba2.png ] && cp ../tiba2.png .
-          [ -f ../tiba2_rear.png ] && cp ../tiba2_rear.png .
 
-          # تنظیم assets
+          # کپی فایل رابط کاربری و تصاویر خودرو
+          cp ../lib/main.dart lib/main.dart
+          if [ -f "../tiba2.png" ]; then cp ../tiba2.png ./; fi
+          if [ -f "../tiba2_rear.png" ]; then cp ../tiba2_rear.png ./; fi
+
+          # تنظیم دارایی‌ها (assets) در pubspec.yaml
           cat << 'EOF' >> pubspec.yaml
             assets:
               - tiba2.png
               - tiba2_rear.png
           EOF
 
-          # اضافه کردن مجوزهای مانیفست (GPS + دیدن کل برنامه‌های مانیتور QUERY_ALL_PACKAGES)
-          sed -i '/<application/i \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" \/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" \/>\n    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" \/>' android/app/src/main/AndroidManifest.xml
-          
-          # تعریف تگ لانچر رسمی اندروید
-          sed -i '/<category android:name="android.intent.category.LAUNCHER"\/>/a \                <category android:name="android.intent.category.HOME"\/>\n                <category android:name="android.intent.category.DEFAULT"\/>' android/app/src/main/AndroidManifest.xml
-
-          # کد اجرایی بدون باگ اینتنت‌ها در کاتلین
-          cat << 'EOF' > android/app/src/main/kotlin/com/tiba2/tiba_project/MainActivity.kt
+          # تزریق کدهای نیتیو اندروید برای دریافت و اجرای کلیدها
+          KT_PATH="android/app/src/main/kotlin/com/tiba2/tiba_project/MainActivity.kt"
+          mkdir -p $(dirname $KT_PATH)
+          cat << 'EOF' > $KT_PATH
           package com.tiba2.tiba_project
 
           import android.content.Intent
           import android.net.Uri
           import android.provider.Settings
+          import android.view.KeyEvent
           import io.flutter.embedding.android.FlutterActivity
           import io.flutter.embedding.engine.FlutterEngine
           import io.flutter.plugin.common.MethodChannel
 
           class MainActivity: FlutterActivity() {
-              private val CHANNEL = "com.tiba2.launcher/intent"
+              private val CHANNEL = "com.tiba2.launcher/actions"
 
               override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
-                  super.configureFlutterEngine(flutterEngine)
-                  MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
-                      val action = call.argument<String>("action")
-                      val packageName = call.argument<String>("package")
-                      val uriStr = call.argument<String>("uri")
+                super.configureFlutterEngine(flutterEngine)
+                MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+                  val action = call.argument<String>("action") ?: ""
+                  val pkg = call.argument<String>("pkg") ?: ""
 
-                      try {
-                          var intent: Intent? = null
-
-                          // اولویت اول: اگر پکیج فرستاده شده (نشان، بلد، گوگل مپ)
-                          if (!packageName.isNullOrEmpty()) {
-                              intent = packageManager.getLaunchIntentForPackage(packageName)
-                          }
-
-                          // اولویت دوم: بر اساس نوع درخواست دکمه‌ها
-                          if (intent == null && action != null) {
-                              if (action == "android.settings.SETTINGS" || action.contains("SETTINGS")) {
-                                  // تنظیمات عمومی خود مانیتور
-                                  intent = Intent(Settings.ACTION_SETTINGS)
-                              } else if (action.contains("DIAL") || action.contains("CALL")) {
-                                  // دکمه تماس / شماره‌گیر
-                                  intent = Intent(Intent.ACTION_DIAL)
-                              } else if (action.contains("LOCATION")) {
-                                  // تنظیمات GPS
-                                  intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
-                              } else {
-                                  intent = Intent(action)
-                              }
-                          }
-
-                          // در صورتی که پلیر یا رادیو بود و پکیج مستقیم نداشت
-                          if (intent == null && action != null && (action.contains("MUSIC") || action.contains("RADIO"))) {
-                              val pm = packageManager
-                              val allApps = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
-                              for (ri in allApps) {
-                                  val pName = ri.activityInfo.packageName.lowercase()
-                                  if (pName.contains("music") || pName.contains("media") || pName.contains("audio") || pName.contains("radio")) {
-                                      intent = pm.getLaunchIntentForPackage(ri.activityInfo.packageName)
-                                      break
-                                  }
-                              }
-                          }
-
-                          if (intent != null) {
-                              if (uriStr != null) {
-                                  intent.data = Uri.parse(uriStr)
-                              }
-                              intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                              startActivity(intent)
-                              result.success(true)
-                          } else {
-                              // اگر هیچی پیدا نشد، تنظیمات کلی باز شود نه صفحه اعلان‌ها!
-                              val fallbackIntent = Intent(Settings.ACTION_SETTINGS).apply {
-                                  addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                              }
-                              startActivity(fallbackIntent)
-                              result.success(true)
-                          }
-                      } catch (e: Exception) {
-                          result.success(false)
+                  try {
+                    when (action) {
+                      "settings" -> {
+                        startActivity(Intent(Settings.ACTION_SETTINGS).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
                       }
+                      "location_settings" -> {
+                        startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
+                      }
+                      "apps" -> {
+                        val intent = packageManager.getLaunchIntentForPackage("com.android.launcher3")
+                            ?: Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_LAUNCHER) }
+                        startActivity(intent.apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
+                      }
+                      "phone" -> {
+                        startActivity(Intent(Intent.ACTION_DIAL).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
+                      }
+                      "radio" -> {
+                        val launchIntent = packageManager.getLaunchIntentForPackage("com.microntek.radio") 
+                            ?: packageManager.getLaunchIntentForPackage("com.hcn.radio")
+                        if (launchIntent != null) {
+                            startActivity(launchIntent)
+                        } else {
+                            startActivity(Intent(Intent.ACTION_MAIN).apply {
+                                addCategory(Intent.CATEGORY_APP_MUSIC)
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            })
+                        }
+                      }
+                      "music" -> {
+                        startActivity(Intent(Intent.ACTION_MAIN).apply {
+                          addCategory(Intent.CATEGORY_APP_MUSIC)
+                          addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        })
+                      }
+                      "media_play_pause" -> {
+                        val i = Intent(Intent.ACTION_MEDIA_BUTTON)
+                        i.putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE))
+                        sendOrderedBroadcast(i, null)
+                        i.putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE))
+                        sendOrderedBroadcast(i, null)
+                      }
+                      "media_next" -> {
+                        val i = Intent(Intent.ACTION_MEDIA_BUTTON)
+                        i.putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_NEXT))
+                        sendOrderedBroadcast(i, null)
+                        i.putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_NEXT))
+                        sendOrderedBroadcast(i, null)
+                      }
+                      "media_prev" -> {
+                        val i = Intent(Intent.ACTION_MEDIA_BUTTON)
+                        i.putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PREVIOUS))
+                        sendOrderedBroadcast(i, null)
+                        i.putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PREVIOUS))
+                        sendOrderedBroadcast(i, null)
+                      }
+                      "nav" -> {
+                        var launchIntent = if (pkg.isNotEmpty()) packageManager.getLaunchIntentForPackage(pkg) else null
+                        if (launchIntent != null) {
+                          startActivity(launchIntent)
+                        } else {
+                          startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=")).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
+                        }
+                      }
+                    }
+                    result.success(true)
+                  } catch (e: Exception) {
+                    result.success(false)
                   }
+                }
               }
           }
           EOF
 
-      - name: Build APK
-        run: |
-          cd tiba_project
+          # اضافه کردن مجوزهای لازم و تگ لانچر پیش‌فرض خودرو
+          sed -i 's/<application/<uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" \/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" \/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" \/>\n    <application/g' android/app/src/main/AndroidManifest.xml
+          sed -i 's/<category android:name="android.intent.category.LAUNCHER"\/>/<category android:name="android.intent.category.LAUNCHER"\/>\n                <category android:name="android.intent.category.HOME"\/>\n                <category android:name="android.intent.category.DEFAULT"\/>/g' android/app/src/main/AndroidManifest.xml
+
           flutter pub get
           flutter build apk --release
 
-      - name: Upload APK Artifact
+          cp build/app/outputs/flutter-apk/app-release.apk ../app-release.apk
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-release
-          path: tiba_project/build/app/outputs/flutter-apk/app-release.apk
+          name: tiba-launcher-apk
+          path: app-release.apk
