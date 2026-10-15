@@ -89,7 +89,7 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> with TickerProviderStateMixin {
+class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProviderStateMixin {
   // Speed & GPS
   double _currentSpeed = 0.0;
   StreamSubscription<Position>? _positionStream;
@@ -155,7 +155,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
       _positionStream = Geolocator.getPositionStream(locationSettings: locationSettings).listen((Position pos) {
         if (mounted) {
           setState(() {
-            _currentSpeed = (pos.speed < 0 ? 0.0 : pos.speed * 3.6); // km/h
+            _currentSpeed = (pos.speed < 0 ? 0.0 : pos.speed * 3.6);
           });
         }
       });
@@ -211,17 +211,23 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     } catch (_) {}
   }
 
+  String _formatDuration(Duration d) {
+    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return "$m:$s";
+  }
+
   void _openSettingsDialog() {
     Color selectedColor = widget.primaryColor;
     double glow = widget.glowIntensity;
 
     final palette = [
-      const Color(0xFF00E5FF), // Cyber Cyan
-      const Color(0xFF2979FF), // Deep Blue
-      const Color(0xFFD500F9), // Cyber Violet
-      const Color(0xFFFF1744), // Neon Red
-      const Color(0xFFFF9100), // Amber Gold
-      const Color(0xFF00E676), // Neon Green
+      const Color(0xFF00E5FF),
+      const Color(0xFF2979FF),
+      const Color(0xFFD500F9),
+      const Color(0xFFFF1744),
+      const Color(0xFFFF9100),
+      const Color(0xFF00E676),
     ];
 
     showDialog(
@@ -281,7 +287,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                       }).toList(),
                     ),
                     const SizedBox(height: 20),
-                    Text("شدت نور و درخشش نئون (${(glow * 100).toInt()}%):", style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                    Text("شدت نور نئون (${(glow * 100).toInt()}%):", style: const TextStyle(color: Colors.white70, fontSize: 13)),
                     Slider(
                       value: glow,
                       min: 0.3,
@@ -316,6 +322,25 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
           },
         );
       },
+    );
+  }
+
+  Widget _neonPanel({required Widget child, required Color theme, required double glow}) {
+    return Container(
+      margin: const EdgeInsets.all(5),
+      decoration: BoxDecoration(
+        color: const Color(0xFF06101E).withOpacity(0.85),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: theme.withOpacity(0.3 * glow), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: theme.withOpacity(0.12 * glow),
+            blurRadius: 10 * glow,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: child,
     );
   }
 
@@ -371,9 +396,6 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     );
   }
 
-  // -------------------------------------------------------------
-  // TOP STATUS BAR
-  // -------------------------------------------------------------
   Widget _buildTopStatusBar(Color theme, double glow) {
     return Container(
       height: 36,
@@ -420,9 +442,6 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     );
   }
 
-  // -------------------------------------------------------------
-  // DOCK SIDEBAR
-  // -------------------------------------------------------------
   Widget _buildDockSidebar(Color theme, double glow) {
     return Container(
       width: 54,
@@ -471,16 +490,12 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     );
   }
 
-  // -------------------------------------------------------------
-  // NAVIGATION CARD (3D Road Perspective)
-  // -------------------------------------------------------------
   Widget _buildNavigationCard(Color theme, double glow) {
     return _neonPanel(
       theme: theme,
       glow: glow,
       child: Stack(
         children: [
-          // 3D Styled Road Map Background
           ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: CustomPaint(
@@ -528,7 +543,6 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                   ],
                 ),
                 const Spacer(),
-                // ETA Row
                 Container(
                   padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
                   decoration: BoxDecoration(
@@ -545,7 +559,6 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                   ),
                 ),
                 const SizedBox(height: 8),
-                // Start Navigation Button
                 SizedBox(
                   width: double.infinity,
                   height: 38,
@@ -576,9 +589,6 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     );
   }
 
-  // -------------------------------------------------------------
-  // SPEEDOMETER CARD (Full Numbers + Saipa Neon Logo + Real Tiba 2 & Road)
-  // -------------------------------------------------------------
   Widget _buildSpeedometerCard(Color theme, double glow) {
     return _neonPanel(
       theme: theme,
@@ -586,7 +596,6 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // 1. Perspective Road Underneath
           Positioned(
             bottom: 0,
             left: 0,
@@ -604,8 +613,6 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
               },
             ),
           ),
-
-          // 2. Real Tiba 2 Vehicle Image on Road
           Positioned(
             bottom: 38,
             child: SizedBox(
@@ -620,8 +627,6 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
               ),
             ),
           ),
-
-          // 3. Dial Gauges with Full Scale Numbers
           Positioned.fill(
             top: 6,
             bottom: 60,
@@ -633,8 +638,6 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
               ),
             ),
           ),
-
-          // 4. Center Speed Digital Readout + SAIPA Neon Logo
           Positioned(
             top: 48,
             child: Column(
@@ -662,7 +665,6 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                   ),
                 ),
                 const SizedBox(height: 10),
-                // SAIPA Glowing Neon Emblem
                 CustomPaint(
                   size: const Size(36, 32),
                   painter: SaipaNeonLogoPainter(color: theme, glow: glow),
@@ -670,8 +672,6 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
               ],
             ),
           ),
-
-          // 5. Gear Selection (D, P, R, N)
           Positioned(
             bottom: 8,
             child: Row(
@@ -712,10 +712,12 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     );
   }
 
-  // -------------------------------------------------------------
-  // MUSIC PLAYER CARD
-  // -------------------------------------------------------------
   Widget _buildMusicCard(Color theme, double glow) {
+    final curPosSec = _position.inSeconds.toDouble();
+    final durSec = _duration.inSeconds.toDouble();
+    final sliderMax = durSec > 0 ? durSec : 1.0;
+    final sliderVal = curPosSec.clamp(0.0, sliderMax);
+
     return _neonPanel(
       theme: theme,
       glow: glow,
@@ -778,7 +780,6 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                 ],
               ),
             ),
-            // Progress Bar
             SliderTheme(
               data: SliderTheme.of(context).copyWith(
                 trackHeight: 3,
@@ -789,8 +790,8 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                 thumbColor: Colors.white,
               ),
               child: Slider(
-                value: _position.inSeconds.toDouble().clamp(0.0, _duration.inSeconds.toDouble() > 0 ? _duration.inSeconds.toDouble() : 1.0),
-                max: _duration.inSeconds.toDouble() > 0 ? _duration.inSeconds.toDouble() : 1.0,
+                value: sliderVal,
+                max: sliderMax,
                 onChanged: (v) => _audioPlayer.seek(Duration(seconds: v.toInt())),
               ),
             ),
@@ -806,4 +807,26 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
               children: [
                 IconButton(icon: const Icon(Icons.shuffle, size: 16, color: Colors.white54), onPressed: () {}),
                 IconButton(
-                  icon: const Icon(Icon
+                  icon: const Icon(Icons.skip_previous_rounded, size: 22, color: Colors.white),
+                  onPressed: () => _audioPlayer.seekToPrevious(),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    if (_isPlaying) {
+                      _audioPlayer.pause();
+                    } else {
+                      _audioPlayer.play();
+                    }
+                  },
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: theme.withOpacity(0.2),
+                      border: Border.all(color: theme, width: 1.5),
+                      boxShadow: [
+                        BoxShadow(color: theme.withOpacity(0.5 * glow), blurRadius: 12 * glow),
+                      ],
+                    ),
+                    child: Icon(_isPlaying ? Icons.pau
