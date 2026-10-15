@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -41,62 +40,50 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen>
-    with SingleTickerProviderStateMixin {
-  // سرعت و انیمیشن
+class _DashboardScreenState extends State<DashboardScreen> {
   double _currentSpeed = 0.0;
-  double _targetSpeed = 0.0;
   StreamSubscription<Position>? _gpsSubscription;
 
-  // وضعیت و زمان
   late Timer _clockTimer;
   late Timer _roadAnimTimer;
-  String _timeString = "";
+  String _timeString = "--:--";
   String _dateString = "";
   double _roadOffset = 0.0;
 
-  // وضعیت موزیک و سیستم
   bool _isPlaying = true;
-  String _songTitle = "Shadmehr - Ghoroor";
-  String _artistName = "Cyber Wave Mix";
-  double _musicProgress = 0.42;
+  final String _songTitle = "Shadmehr - Ghoroor";
+  final String _artistName = "Cyber Wave Mix";
+  final double _musicProgress = 0.45;
 
-  // شخصی‌سازی نئون (ذخیره در SharedPreferences)
   Color _neonThemeColor = const Color(0xFF00E5FF);
   double _neonGlowFactor = 1.0;
 
   final List<Color> _availableColors = const [
-    Color(0xFF00E5FF), // فیروزه‌ای سایبری
-    Color(0xFF0077FF), // آبی نئونی غلیظ
-    Color(0xFFFF0055), // سرخ / صورتی سایبرپانک
-    Color(0xFF00FF66), // سبز نئونی ماتریسی
-    Color(0xFFFFB300), // کهربایی گرم
-    Color(0xFF9D00FF), // بنفش نئون
+    Color(0xFF00E5FF),
+    Color(0xFF0077FF),
+    Color(0xFFFF0055),
+    Color(0xFF00FF66),
+    Color(0xFFFFB300),
+    Color(0xFF9D00FF),
   ];
 
   @override
-  void initState superInit() {
+  void initState() {
     super.initState();
     _loadSettings();
-    _updateTime();
-    _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) => _updateTime());
+    _updateClock();
+    _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) => _updateClock());
 
-    // تایمر حرکت خطوط جاده زیر خودرو و نقشه
     _roadAnimTimer = Timer.periodic(const Duration(milliseconds: 33), (_) {
       if (mounted) {
         setState(() {
-          double speedFactor = _currentSpeed > 5 ? (_currentSpeed / 40.0) : 0.8;
-          _roadOffset = (_roadOffset + (0.02 * speedFactor)) % 1.0;
+          double factor = _currentSpeed > 5 ? (_currentSpeed / 40.0) : 0.8;
+          _roadOffset = (_roadOffset + (0.02 * factor)) % 1.0;
         });
       }
     });
 
     _initGps();
-  }
-
-  @override
-  void initState() {
-    superInit();
   }
 
   @override
@@ -111,12 +98,8 @@ class _DashboardScreenState extends State<DashboardScreen>
     final prefs = await SharedPreferences.getInstance();
     final colorVal = prefs.getInt('neon_color');
     final glowVal = prefs.getDouble('neon_glow');
-    if (colorVal != null) {
-      _neonThemeColor = Color(colorVal);
-    }
-    if (glowVal != null) {
-      _neonGlowFactor = glowVal;
-    }
+    if (colorVal != null) _neonThemeColor = Color(colorVal);
+    if (glowVal != null) _neonGlowFactor = glowVal;
     if (mounted) setState(() {});
   }
 
@@ -130,39 +113,43 @@ class _DashboardScreenState extends State<DashboardScreen>
     });
   }
 
-  void _updateTime() {
+  void _updateClock() {
     final now = DateTime.now();
+    final h = now.hour.toString().padLeft(2, '0');
+    final m = now.minute.toString().padLeft(2, '0');
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     setState(() {
-      _timeString = DateFormat('HH:mm').format(now);
-      _dateString = DateFormat('EEE, d MMM').format(now);
+      _timeString = "$h:$m";
+      _dateString = "${days[now.weekday - 1]}, ${now.day} ${months[now.month - 1]}";
     });
   }
 
   Future<void> _initGps() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return;
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
 
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) return;
-    }
-    if (permission == LocationPermission.deniedForever) return;
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return;
+      }
+      if (permission == LocationPermission.deniedForever) return;
 
-    _gpsSubscription = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.bestForNavigation,
-        distanceFilter: 1,
-      ),
-    ).listen((Position position) {
-      double rawSpeed = position.speed; // متر بر ثانیه
-      if (rawSpeed < 0 || rawSpeed.isNaN) rawSpeed = 0.0;
-      double kmh = rawSpeed * 3.6;
-      setState(() {
-        _targetSpeed = kmh.clamp(0.0, 240.0);
-        _currentSpeed = _targetSpeed;
+      _gpsSubscription = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.bestForNavigation,
+          distanceFilter: 1,
+        ),
+      ).listen((Position pos) {
+        double raw = pos.speed;
+        if (raw < 0 || raw.isNaN) raw = 0.0;
+        setState(() {
+          _currentSpeed = (raw * 3.6).clamp(0.0, 240.0);
+        });
       });
-    });
+    } catch (_) {}
   }
 
   void _openSettingsDialog() {
@@ -189,7 +176,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('انتخاب طیف رنگ نئونی:', style: TextStyle(color: Colors.white70)),
+                  const Text('طیف رنگی نئون:', style: TextStyle(color: Colors.white70)),
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 12,
@@ -198,8 +185,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                       return GestureDetector(
                         onTap: () => setDialogState(() => selectedColor = c),
                         child: Container(
-                          width: 42,
-                          height: 42,
+                          width: 40,
+                          height: 40,
                           decoration: BoxDecoration(
                             color: c,
                             shape: BoxShape.circle,
@@ -223,7 +210,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('شدت روشنایی (Glow):', style: TextStyle(color: Colors.white70)),
+                      const Text('شدت درخشش (Glow):', style: TextStyle(color: Colors.white70)),
                       Text('${(selectedGlow * 100).toInt()}%', style: TextStyle(color: selectedColor)),
                     ],
                   ),
@@ -272,40 +259,22 @@ class _DashboardScreenState extends State<DashboardScreen>
           gradient: RadialGradient(
             center: Alignment(0.0, -0.2),
             radius: 1.2,
-            colors: [
-              Color(0xFF0A1526),
-              Color(0xFF04070D),
-              Color(0xFF010306),
-            ],
+            colors: [Color(0xFF0A1526), Color(0xFF04070D), Color(0xFF010306)],
           ),
         ),
         child: SafeArea(
           child: Column(
             children: [
-              // نوار بالایی هدر
               _buildTopBar(theme, glow),
-
-              // سه ستون اصلی HUD داشبورد
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
                   child: Row(
                     children: [
-                      // ستون سمت چپ: مسیریاب سه‌بعدی نئونی
-                      Expanded(
-                        flex: 31,
-                        child: _buildNavigationCard(theme, glow),
-                      ),
+                      Expanded(flex: 31, child: _buildNavigationCard(theme, glow)),
                       const SizedBox(width: 14),
-
-                      // ستون مرکزی: سرعت‌شمار دایره‌ای با سایپا و تیبا روی جاده
-                      Expanded(
-                        flex: 38,
-                        child: _buildSpeedometerCenter(theme, glow),
-                      ),
+                      Expanded(flex: 38, child: _buildSpeedometerCenter(theme, glow)),
                       const SizedBox(width: 14),
-
-                      // ستون سمت راست: وضعیت خودرو و پلیر موزیک
                       Expanded(
                         flex: 31,
                         child: Column(
@@ -320,8 +289,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                   ),
                 ),
               ),
-
-              // نوار اپلیکیشن‌های پایین
               _buildBottomQuickDock(theme, glow),
             ],
           ),
@@ -336,7 +303,6 @@ class _DashboardScreenState extends State<DashboardScreen>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // ساعت و تاریخ نئونی
           Row(
             children: [
               Icon(Icons.access_time_filled, color: theme, size: 20),
@@ -351,14 +317,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ),
               ),
               const SizedBox(width: 12),
-              Text(
-                _dateString,
-                style: const TextStyle(fontSize: 13, color: Colors.white60),
-              ),
+              Text(_dateString, style: const TextStyle(fontSize: 13, color: Colors.white60)),
             ],
           ),
-
-          // نام تیبا و آیکون وضعیت‌ها
           Row(
             children: [
               Container(
@@ -413,10 +374,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       decoration: BoxDecoration(
         color: const Color(0xFF090E17).withOpacity(0.85),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: color.withOpacity(0.35 * glow),
-          width: 1.5,
-        ),
+        border: Border.all(color: color.withOpacity(0.35 * glow), width: 1.5),
         boxShadow: [
           BoxShadow(
             color: color.withOpacity(0.15 * glow),
@@ -429,7 +387,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  // ۱. پنل مسیریاب زنده نئونی
   Widget _buildNavigationCard(Color theme, double glow) {
     return _neonPanel(
       color: theme,
@@ -444,10 +401,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 children: [
                   Icon(Icons.navigation_rounded, color: theme, size: 18),
                   const SizedBox(width: 6),
-                  Text(
-                    "مسیریاب زنده",
-                    style: TextStyle(color: theme, fontSize: 13, fontWeight: FontWeight.bold),
-                  ),
+                  Text("مسیریاب زنده", style: TextStyle(color: theme, fontSize: 13, fontWeight: FontWeight.bold)),
                 ],
               ),
               Container(
@@ -461,8 +415,6 @@ class _DashboardScreenState extends State<DashboardScreen>
             ],
           ),
           const SizedBox(height: 8),
-
-          // جاده نئون سه‌بعدی مسیریابی
           Expanded(
             child: ClipRRect(
               borderRadius: BorderRadius.circular(14),
@@ -510,13 +462,12 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
           ),
           const SizedBox(height: 8),
-
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: const [
-              _NavMetric(title: "۸ دقیقه", subtitle: "تا مقصد"),
-              _NavMetric(title: "۴.۲ km", subtitle: "فاصله باقی‌مانده"),
-              _NavMetric(title: "۱۹:۴۵", subtitle: "زمان رسیدن"),
+            children: [
+              _navMetricItem("۸ دقیقه", "تا مقصد"),
+              _navMetricItem("۴.۲ km", "فاصله باقی‌مانده"),
+              _navMetricItem("۱۹:۴۵", "زمان رسیدن"),
             ],
           ),
         ],
@@ -524,7 +475,16 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  // ۲. سرعت‌شمار بزرگ نئون + آرم سایپا + تیبا ۲ روی جاده
+  Widget _navMetricItem(String title, String subtitle) {
+    return Column(
+      children: [
+        Text(title, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 2),
+        Text(subtitle, style: const TextStyle(color: Colors.white38, fontSize: 9)),
+      ],
+    );
+  }
+
   Widget _buildSpeedometerCenter(Color theme, double glow) {
     return _neonPanel(
       color: theme,
@@ -533,7 +493,6 @@ class _DashboardScreenState extends State<DashboardScreen>
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // خطوط جاده پرسپکتیو در نیمه پایینی
           Positioned(
             bottom: 0,
             left: 0,
@@ -546,8 +505,6 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
             ),
           ),
-
-          // خودروی واقعی تیبا ۲ روی جاده
           Positioned(
             bottom: 12,
             child: Image.asset(
@@ -560,8 +517,6 @@ class _DashboardScreenState extends State<DashboardScreen>
               },
             ),
           ),
-
-          // صفحه مدرج دایره‌ای سرعت‌شمار
           Positioned.fill(
             child: CustomPaint(
               painter: SpeedometerDialPainter(
@@ -571,8 +526,6 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
             ),
           ),
-
-          // آرم نئونی شرکت سایپا در بالای سرعت‌شمار
           Positioned(
             top: 22,
             child: SizedBox(
@@ -583,8 +536,6 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
             ),
           ),
-
-          // عدد بزرگ سرعت در مرکز
           Positioned(
             top: 86,
             child: Column(
@@ -622,7 +573,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  // ۳. وضعیت فنی خودرو
   Widget _buildCarStatusCard(Color theme, double glow) {
     return _neonPanel(
       color: theme,
@@ -641,9 +591,9 @@ class _DashboardScreenState extends State<DashboardScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _CarMetricItem(icon: Icons.local_gas_station, label: "بنزین", value: "۶۸٪", color: theme),
-              _CarMetricItem(icon: Icons.speed, label: "باد لاستیک", value: "32 PSI", color: theme),
-              _CarMetricItem(icon: Icons.thermostat, label: "دما", value: "۸۸°C", color: theme),
+              _carMetricWidget(Icons.local_gas_station, "بنزین", "۶۸٪", theme),
+              _carMetricWidget(Icons.speed, "باد لاستیک", "32 PSI", theme),
+              _carMetricWidget(Icons.thermostat, "دما", "۸۸°C", theme),
             ],
           ),
           const Spacer(),
@@ -652,7 +602,17 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  // ۴. پخش‌کننده موسیقی نئونی
+  Widget _carMetricWidget(IconData icon, String label, String value, Color color) {
+    return Column(
+      children: [
+        Icon(icon, color: color, size: 20),
+        const SizedBox(height: 4),
+        Text(value, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+        Text(label, style: const TextStyle(color: Colors.white38, fontSize: 9)),
+      ],
+    );
+  }
+
   Widget _buildMusicCard(Color theme, double glow) {
     return _neonPanel(
       color: theme,
@@ -744,7 +704,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  // ۵. نوار دسترسی سریع پایین
   Widget _buildBottomQuickDock(Color theme, double glow) {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -757,20 +716,35 @@ class _DashboardScreenState extends State<DashboardScreen>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _DockButton(icon: Icons.map, label: "نقشه", color: theme, onTap: () {}),
-          _DockButton(icon: Icons.radio, label: "رادیو", color: theme, onTap: () {}),
-          _DockButton(icon: Icons.phone, label: "تماس", color: theme, onTap: () {}),
-          _DockButton(icon: Icons.apps, label: "برنامه‌ها", color: theme, onTap: () {}),
-          _DockButton(icon: Icons.tune, label: "نورپردازی", color: theme, onTap: _openSettingsDialog),
+          _dockButtonWidget(Icons.map, "نقشه", theme, () {}),
+          _dockButtonWidget(Icons.radio, "رادیو", theme, () {}),
+          _dockButtonWidget(Icons.phone, "تماس", theme, () {}),
+          _dockButtonWidget(Icons.apps, "برنامه‌ها", theme, () {}),
+          _dockButtonWidget(Icons.tune, "نورپردازی", theme, _openSettingsDialog),
         ],
+      ),
+    );
+  }
+
+  Widget _dockButtonWidget(IconData icon, String label, Color color, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(height: 2),
+            Text(label, style: const TextStyle(color: Colors.white70, fontSize: 10)),
+          ],
+        ),
       ),
     );
   }
 }
 
-// -------------------------------------------------------------
-// نقاش آرم نئونی شرکت سایپا
-// -------------------------------------------------------------
 class SaipaNeonLogoPainter extends CustomPainter {
   final Color color;
   final double glow;
@@ -823,9 +797,6 @@ class SaipaNeonLogoPainter extends CustomPainter {
       oldDelegate.color != color || oldDelegate.glow != glow;
 }
 
-// -------------------------------------------------------------
-// نقاش صفحه مدرج سرعت‌شمار دایره‌ای (۰ تا ۲۴۰)
-// -------------------------------------------------------------
 class SpeedometerDialPainter extends CustomPainter {
   final double speed;
   final Color themeColor;
@@ -845,7 +816,6 @@ class SpeedometerDialPainter extends CustomPainter {
     const startAngle = 135 * (math.pi / 180);
     const sweepAngle = 270 * (math.pi / 180);
 
-    // کمان پس‌زمینه
     final bgArcPaint = Paint()
       ..color = Colors.white.withOpacity(0.08)
       ..style = PaintingStyle.stroke
@@ -858,7 +828,6 @@ class SpeedometerDialPainter extends CustomPainter {
       bgArcPaint,
     );
 
-    // کمان نئونی متناسب با سرعت
     double progressRatio = (speed / 240.0).clamp(0.0, 1.0);
     final activeGlowPaint = Paint()
       ..color = themeColor.withOpacity(0.85 * glow)
@@ -888,6 +857,136 @@ class SpeedometerDialPainter extends CustomPainter {
       activeLinePaint,
     );
 
-    // خطوط تیک و شماره‌گذاری‌ها (۰ تا ۲۴۰)
     final tickPaint = Paint()..strokeCap = StrokeCap.round;
-    for (int i = 0; 
+    for (int i = 0; i <= 24; i++) {
+      int tickVal = i * 10;
+      double tickFraction = i / 24.0;
+      double angle = startAngle + (tickFraction * sweepAngle);
+      bool isMajor = i % 2 == 0;
+
+      double outerR = radius - 8;
+      double innerR = outerR - (isMajor ? 12 : 6);
+
+      bool isPassed = tickVal <= speed;
+      tickPaint.color = isPassed ? themeColor : Colors.white24;
+      tickPaint.strokeWidth = isMajor ? 2.2 : 1.2;
+
+      Offset p1 = Offset(center.dx + innerR * math.cos(angle), center.dy + innerR * math.sin(angle));
+      Offset p2 = Offset(center.dx + outerR * math.cos(angle), center.dy + outerR * math.sin(angle));
+      canvas.drawLine(p1, p2, tickPaint);
+
+      if (isMajor && tickVal % 20 == 0) {
+        final textSpan = TextSpan(
+          text: '$tickVal',
+          style: TextStyle(
+            color: isPassed ? Colors.white : Colors.white38,
+            fontSize: 9,
+            fontWeight: FontWeight.bold,
+          ),
+        );
+        final tp = TextPainter(text: textSpan, textDirection: TextDirection.ltr);
+        tp.layout();
+        double numR = innerR - 12;
+        Offset numPos = Offset(
+          center.dx + numR * math.cos(angle) - (tp.width / 2),
+          center.dy + numR * math.sin(angle) - (tp.height / 2),
+        );
+        tp.paint(canvas, numPos);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant SpeedometerDialPainter oldDelegate) =>
+      oldDelegate.speed != speed || oldDelegate.themeColor != themeColor || oldDelegate.glow != glow;
+}
+
+class RoadPerspectivePainter extends CustomPainter {
+  final Color neonColor;
+  final double progress;
+
+  RoadPerspectivePainter({required this.neonColor, required this.progress});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final horizonY = 0.0;
+    final bottomY = size.height;
+    final centerX = size.width / 2;
+
+    final roadPaint = Paint()
+      ..color = neonColor.withOpacity(0.35)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
+
+    canvas.drawLine(Offset(centerX - 15, horizonY), Offset(centerX - 130, bottomY), roadPaint);
+    canvas.drawLine(Offset(centerX + 15, horizonY), Offset(centerX + 130, bottomY), roadPaint);
+
+    for (int i = 0; i < 5; i++) {
+      double t = (i / 5.0 + progress) % 1.0;
+      double y = horizonY + math.pow(t, 2.2) * (bottomY - horizonY);
+      double width = 30 + math.pow(t, 2.2) * 200;
+
+      final stripePaint = Paint()
+        ..color = neonColor.withOpacity(t * 0.4)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5;
+
+      canvas.drawLine(Offset(centerX - width / 2, y), Offset(centerX + width / 2, y), stripePaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant RoadPerspectivePainter oldDelegate) =>
+      oldDelegate.progress != progress || oldDelegate.neonColor != neonColor;
+}
+
+class NavigationRoadPainter extends CustomPainter {
+  final Color themeColor;
+  final double roadProgress;
+
+  NavigationRoadPainter({required this.themeColor, required this.roadProgress});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final bgPaint = Paint()..color = const Color(0xFF060B14);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), bgPaint);
+
+    final gridPaint = Paint()
+      ..color = themeColor.withOpacity(0.08)
+      ..strokeWidth = 1.0;
+
+    for (double x = 0; x < size.width; x += 25) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+    }
+    for (double y = 0; y < size.height; y += 25) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
+    final path = Path();
+    path.moveTo(size.width * 0.5, size.height);
+    path.quadraticBezierTo(
+      size.width * 0.5,
+      size.height * 0.45,
+      size.width * 0.8,
+      size.height * 0.15,
+    );
+
+    final routeGlowPaint = Paint()
+      ..color = themeColor.withOpacity(0.6)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 7
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+
+    final routePaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3;
+
+    canvas.drawPath(path, routeGlowPaint);
+    canvas.drawPath(path, routePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant NavigationRoadPainter oldDelegate) =>
+      oldDelegate.roadProgress != roadProgress || oldDelegate.themeColor != themeColor;
+}
