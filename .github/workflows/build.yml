@@ -29,23 +29,25 @@ jobs:
           flutter create --org com.tiba2 tiba_project
           cd tiba_project
           
-          # کپی فایل‌های پروژه و عکس‌ها
+          # کپی فایل‌های اصلی و عکس‌ها
           cp ../lib/main.dart lib/main.dart
           [ -f ../tiba2.png ] && cp ../tiba2.png .
           [ -f ../tiba2_rear.png ] && cp ../tiba2_rear.png .
 
-          # تنظیم assets در pubspec.yaml
+          # تنظیم assets
           cat << 'EOF' >> pubspec.yaml
             assets:
               - tiba2.png
               - tiba2_rear.png
           EOF
 
-          # دسترسی‌های سخت‌افزاری GPS و تعریف لانچر رسمی
-          sed -i '/<application/i \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" \/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" \/>' android/app/src/main/AndroidManifest.xml
+          # اضافه کردن مجوزهای مانیفست (GPS + دیدن کل برنامه‌های مانیتور QUERY_ALL_PACKAGES)
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" \/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" \/>\n    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" \/>' android/app/src/main/AndroidManifest.xml
+          
+          # تعریف تگ لانچر رسمی اندروید
           sed -i '/<category android:name="android.intent.category.LAUNCHER"\/>/a \                <category android:name="android.intent.category.HOME"\/>\n                <category android:name="android.intent.category.DEFAULT"\/>' android/app/src/main/AndroidManifest.xml
 
-          # جاگذاری MainActivity با شناساگر هوشمند پکیج‌های مانیتور خودرو
+          # کد اجرایی بدون باگ اینتنت‌ها در کاتلین
           cat << 'EOF' > android/app/src/main/kotlin/com/tiba2/tiba_project/MainActivity.kt
           package com.tiba2.tiba_project
 
@@ -69,77 +71,59 @@ jobs:
                       try {
                           var intent: Intent? = null
 
-                          // ۱. اگر پکیج مشخص ارسال شده باشد (مثل نشان یا برنامه‌های انتخابی)
+                          // اولویت اول: اگر پکیج فرستاده شده (نشان، بلد، گوگل مپ)
                           if (!packageName.isNullOrEmpty()) {
                               intent = packageManager.getLaunchIntentForPackage(packageName)
                           }
 
-                          // ۲. شناسایی هوشمند بر اساس اکشن دریافتی
+                          // اولویت دوم: بر اساس نوع درخواست دکمه‌ها
                           if (intent == null && action != null) {
-                              when {
-                                  action.contains("SETTINGS") -> {
-                                      // باز کردن تنظیمات اصلی دستگاه
-                                      intent = Intent(Settings.ACTION_SETTINGS)
-                                  }
-                                  action.contains("DIAL") || action.contains("CALL") -> {
-                                      // باز کردن شماره‌گیر
-                                      intent = Intent(Intent.ACTION_DIAL)
-                                  }
-                                  action.contains("MUSIC") || action.contains("AUDIO") -> {
-                                      // جستجو برای پلیر موزیک دستگاه
-                                      val musicIntent = Intent(Intent.ACTION_MAIN).apply {
-                                          addCategory(Intent.CATEGORY_APP_MUSIC)
-                                      }
-                                      intent = if (musicIntent.resolveActivity(packageManager) != null) {
-                                          musicIntent
-                                      } else {
-                                          // اگر پلیر عمومی نبود، اولین برنامه موزیک/مدیا را پیدا کن
-                                          findAppByKeywords(listOf("music", "player", "audio", "media"))
-                                      }
-                                  }
-                                  action.contains("RADIO") -> {
-                                      // جستجو برای رادیو مانیتور
-                                      intent = findAppByKeywords(listOf("radio", "fm"))
-                                  }
-                                  else -> {
-                                      intent = Intent(action)
+                              if (action == "android.settings.SETTINGS" || action.contains("SETTINGS")) {
+                                  // تنظیمات عمومی خود مانیتور
+                                  intent = Intent(Settings.ACTION_SETTINGS)
+                              } else if (action.contains("DIAL") || action.contains("CALL")) {
+                                  // دکمه تماس / شماره‌گیر
+                                  intent = Intent(Intent.ACTION_DIAL)
+                              } else if (action.contains("LOCATION")) {
+                                  // تنظیمات GPS
+                                  intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+                              } else {
+                                  intent = Intent(action)
+                              }
+                          }
+
+                          // در صورتی که پلیر یا رادیو بود و پکیج مستقیم نداشت
+                          if (intent == null && action != null && (action.contains("MUSIC") || action.contains("RADIO"))) {
+                              val pm = packageManager
+                              val allApps = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+                              for (ri in allApps) {
+                                  val pName = ri.activityInfo.packageName.lowercase()
+                                  if (pName.contains("music") || pName.contains("media") || pName.contains("audio") || pName.contains("radio")) {
+                                      intent = pm.getLaunchIntentForPackage(ri.activityInfo.packageName)
+                                      break
                                   }
                               }
                           }
 
-                          if (uriStr != null && intent != null) {
-                              intent.data = Uri.parse(uriStr)
-                          }
-
                           if (intent != null) {
+                              if (uriStr != null) {
+                                  intent.data = Uri.parse(uriStr)
+                              }
                               intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                               startActivity(intent)
                               result.success(true)
                           } else {
-                              result.success(false)
+                              // اگر هیچی پیدا نشد، تنظیمات کلی باز شود نه صفحه اعلان‌ها!
+                              val fallbackIntent = Intent(Settings.ACTION_SETTINGS).apply {
+                                  addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                              }
+                              startActivity(fallbackIntent)
+                              result.success(true)
                           }
                       } catch (e: Exception) {
                           result.success(false)
                       }
                   }
-              }
-
-              // تابع کمکی برای پیدا کردن برنامه‌های فابریک مانیتور بر اساس کلمات کلیدی
-              private fun findAppByKeywords(keywords: List<String>): Intent? {
-                  val mainIntent = Intent(Intent.ACTION_MAIN, null).apply {
-                      addCategory(Intent.CATEGORY_LAUNCHER)
-                  }
-                  val apps = packageManager.queryIntentActivities(mainIntent, 0)
-                  for (app in apps) {
-                      val pkg = app.activityInfo.packageName.lowercase()
-                      val label = app.loadLabel(packageManager).toString().lowercase()
-                      for (kw in keywords) {
-                          if (pkg.contains(kw) || label.contains(kw)) {
-                              return packageManager.getLaunchIntentForPackage(app.activityInfo.packageName)
-                          }
-                      }
-                  }
-                  return null
               }
           }
           EOF
