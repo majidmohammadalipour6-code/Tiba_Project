@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Setup Java
@@ -25,9 +25,20 @@ jobs:
           flutter-version: '3.24.3'
           channel: 'stable'
 
-      - name: Configure Gradle Repositories
+      - name: Create and Setup Project
         run: |
-          # اصلاح مخازن گریدل و افزودن مخزن گوگل و mavenCentral
+          # 1. ساخت پروژه تمیز اندرویدی با الگوی رسمی اپلیکیشن
+          flutter create -t app --platforms=android --org com.tiba.launcher tiba_project
+          cd tiba_project
+
+          # 2. کپی کردن فایل‌های پروژه شما
+          cp ../lib/main.dart lib/main.dart
+          cp ../pubspec.yaml pubspec.yaml
+          if [ -f ../tiba2.png ]; then
+            cp ../tiba2.png tiba2.png
+          fi
+
+          # 3. افزودن مخازن رسمی گریدل
           mkdir -p ~/.gradle
           cat << 'EOF' > ~/.gradle/init.gradle
           allprojects {
@@ -46,14 +57,19 @@ jobs:
           }
           EOF
 
-      - name: Install Dependencies
-        run: flutter pub get
+          # 4. افزودن تگ‌های لانچر پیش‌فرض مانیتور خودرو به AndroidManifest
+          sed -i '/<category android:name="android.intent.category.LAUNCHER"\/>/a \                <category android:name="android.intent.category.HOME"\/>\n                <category android:name="android.intent.category.DEFAULT"\/>' android/app/src/main/AndroidManifest.xml
+
+          # 5. دریافت وابستگی‌ها
+          flutter pub get
 
       - name: Build APK
-        run: flutter build apk --release
+        run: |
+          cd tiba_project
+          flutter build apk --release
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Tiba2-CyberHUD-Launcher
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: tiba_project/build/app/outputs/flutter-apk/app-release.apk
