@@ -37,6 +37,7 @@ class DashboardHomeScreen extends StatefulWidget {
 }
 
 class _DashboardHomeScreenState extends State<DashboardHomeScreen> {
+  // کانال ارتباطی با سیستم‌عامل اندروید
   static const platform = MethodChannel('com.tiba2.launcher/intent');
 
   double _speed = 0.0;
@@ -66,16 +67,123 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen> {
     });
   }
 
-  Future<void> _launchIntent(String action, {String? uri, String? packageName}) async {
+  // متد ارسال اینتنت هوشمند و چندمرحله‌ای برای مانیتورهای اندروید
+  Future<bool> _sendIntent({
+    required String action,
+    String? uri,
+    String? packageName,
+    String? category,
+  }) async {
     try {
-      await platform.invokeMethod('launchIntent', {
+      final res = await platform.invokeMethod('launchIntent', {
         'action': action,
         'uri': uri,
         'package': packageName,
+        'category': category,
       });
-    } catch (_) {}
+      return res == true;
+    } catch (_) {
+      return false;
+    }
   }
 
+  // باز کردن مستقیم تنظیمات اصلی اندروید
+  Future<void> _openAndroidSettings() async {
+    await _sendIntent(action: "android.settings.SETTINGS");
+  }
+
+  // باز کردن تنظیمات GPS و لوکیشن
+  Future<void> _openLocationSettings() async {
+    await _sendIntent(action: "android.settings.LOCATION_SOURCE_SETTINGS");
+  }
+
+  // باز کردن شماره‌گیر / تماس
+  Future<void> _openDialer() async {
+    await _sendIntent(action: "android.intent.action.DIAL");
+  }
+
+  // باز کردن لیست تمام برنامه‌ها (App Drawer)
+  Future<void> _openAllApps() async {
+    await _sendIntent(action: "android.intent.action.ALL_APPS");
+  }
+
+  // باز کردن موزیک پلیر فابریک مانیتور (با پوشش پکیج‌های فابریک مانیتور خودرو)
+  Future<void> _openMusicPlayer() async {
+    // مرحله ۱: تلاش با کتگوری عمومی موسیقی اندروید
+    bool ok = await _sendIntent(
+      action: "android.intent.action.MAIN",
+      category: "android.intent.category.APP_MUSIC",
+    );
+
+    // مرحله ۲: اگر باز نشد، تست پکیج‌های استاندارد پلیر مانیتورهای چینی/فابریک
+    if (!ok) {
+      final defaultPlayers = [
+        "com.android.music",
+        "com.autochips.music",
+        "com.syu.music",
+        "com.ts.music",
+        "com.forfan.music",
+        "com.microntek.music",
+      ];
+      for (var pkg in defaultPlayers) {
+        ok = await _sendIntent(action: "android.intent.action.MAIN", packageName: pkg);
+        if (ok) break;
+      }
+    }
+
+    // مرحله ۳: اینتنت صوت سراسری
+    if (!ok) {
+      await _sendIntent(action: "android.intent.action.MUSIC_PLAYER");
+    }
+  }
+
+  // باز کردن رادیوی فابریک مانیتور
+  Future<void> _openRadio() async {
+    final radioPackages = [
+      "com.android.fmradio",
+      "com.autochips.radio",
+      "com.syu.radio",
+      "com.ts.radio",
+      "com.microntek.radio",
+    ];
+    bool ok = false;
+    for (var pkg in radioPackages) {
+      ok = await _sendIntent(action: "android.intent.action.MAIN", packageName: pkg);
+      if (ok) break;
+    }
+    if (!ok) {
+      _openMusicPlayer();
+    }
+  }
+
+  // باز کردن نشان
+  Future<void> _openNeshan() async {
+    bool ok = await _sendIntent(
+      action: "android.intent.action.MAIN",
+      packageName: "org.neshan.maps",
+    );
+    if (!ok) {
+      await _sendIntent(action: "android.intent.action.VIEW", uri: "geo:0,0?q=");
+    }
+  }
+
+  // باز کردن بلد
+  Future<void> _openBalad() async {
+    bool ok = await _sendIntent(
+      action: "android.intent.action.MAIN",
+      packageName: "ir.balad.navigation",
+    );
+    if (!ok) {
+      await _sendIntent(action: "android.intent.action.VIEW", uri: "geo:0,0?q=");
+    }
+  }
+
+  // باز کردن گوگل مپ
+  Future<void> _openGoogleMaps() async {
+    await _sendIntent(action: "android.intent.action.VIEW", uri: "geo:0,0?q=");
+  }
+
+  // پاپ‌آپ کالیبراسیون و تنظیمات ماهواره GPS
   void _openGpsCalibration() {
     showDialog(
       context: context,
@@ -86,24 +194,43 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen> {
             borderRadius: BorderRadius.circular(16),
             side: const BorderSide(color: Colors.cyanAccent),
           ),
-          title: const Text("کالیبراسیون سرعت و GPS", style: TextStyle(color: Colors.cyanAccent, fontSize: 16)),
+          title: const Row(
+            children: [
+              Icon(Icons.gps_fixed_rounded, color: Colors.cyanAccent),
+              SizedBox(width: 8),
+              Text("تنظیمات و کالیبراسیون GPS", style: TextStyle(color: Colors.cyanAccent, fontSize: 16)),
+            ],
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                "ضریب: ${_calibrationFactor.toStringAsFixed(2)}x",
-                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                "ضریب خطای کیلومتر: ${_calibrationFactor.toStringAsFixed(2)}x",
+                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
               ),
               Slider(
                 value: _calibrationFactor,
-                min: 0.7,
-                max: 1.3,
-                divisions: 24,
+                min: 0.8,
+                max: 1.2,
+                divisions: 20,
                 activeColor: Colors.cyanAccent,
                 onChanged: (v) {
                   setDlgState(() => _calibrationFactor = v);
                   setState(() => _calibrationFactor = v);
                 },
+              ),
+              const Divider(color: Colors.white24),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF132B4F),
+                  foregroundColor: Colors.cyanAccent,
+                ),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _openLocationSettings();
+                },
+                icon: const Icon(Icons.settings_suggest_rounded, size: 18),
+                label: const Text("ورود به تنظیمات موقعیت مکانی مانیتور"),
               ),
             ],
           ),
@@ -118,6 +245,7 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen> {
     );
   }
 
+  // منوی انتخاب سریع مسیریاب
   void _showNavPicker() {
     showModalBottomSheet(
       context: context,
@@ -127,34 +255,39 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen> {
         side: BorderSide(color: Colors.cyanAccent, width: 1),
       ),
       builder: (_) => Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text("انتخاب مسیر‌یاب", style: TextStyle(color: Colors.cyanAccent, fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
+            const Text(
+              "انتخاب اپلیکیشن مسیریاب",
+              style: TextStyle(color: Colors.cyanAccent, fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
             ListTile(
-              leading: const Icon(Icons.navigation_rounded, color: Colors.greenAccent),
-              title: const Text("نشان (Neshan)", style: TextStyle(color: Colors.white)),
+              leading: const Icon(Icons.navigation_rounded, color: Colors.blueAccent, size: 30),
+              title: const Text("نشان (پیش‌فرض)", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              subtitle: const Text("اجرای مستقیم مسیریاب نشان", style: TextStyle(color: Colors.white54, fontSize: 12)),
               onTap: () {
                 Navigator.pop(context);
-                _launchIntent("android.intent.action.VIEW", packageName: "org.neshan.maps");
+                _openNeshan();
               },
             ),
             ListTile(
-              leading: const Icon(Icons.map_rounded, color: Colors.cyanAccent),
-              title: const Text("بلد (Balad)", style: TextStyle(color: Colors.white)),
+              leading: const Icon(Icons.map_rounded, color: Colors.cyanAccent, size: 30),
+              title: const Text("بلد", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              subtitle: const Text("اجرای مستقیم مسیریاب بلد", style: TextStyle(color: Colors.white54, fontSize: 12)),
               onTap: () {
                 Navigator.pop(context);
-                _launchIntent("android.intent.action.VIEW", packageName: "ir.balad.navigation");
+                _openBalad();
               },
             ),
             ListTile(
-              leading: const Icon(Icons.explore_rounded, color: Colors.orangeAccent),
-              title: const Text("گوگل مپ (Google Maps)", style: TextStyle(color: Colors.white)),
+              leading: const Icon(Icons.explore_rounded, color: Colors.orangeAccent, size: 30),
+              title: const Text("گوگل مپ (Google Maps)", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               onTap: () {
                 Navigator.pop(context);
-                _launchIntent("android.intent.action.VIEW", uri: "geo:0,0?q=");
+                _openGoogleMaps();
               },
             ),
           ],
@@ -234,7 +367,7 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen> {
                   children: [
                     Icon(Icons.gps_fixed_rounded, color: Colors.cyanAccent, size: 16),
                     SizedBox(width: 4),
-                    Text("GPS", style: TextStyle(color: Colors.cyanAccent, fontSize: 12)),
+                    Text("GPS", style: TextStyle(color: Colors.cyanAccent, fontSize: 12, fontWeight: FontWeight.bold)),
                   ],
                 ),
               ),
@@ -266,11 +399,12 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _sidebarIcon(Icons.grid_view_rounded, () => _launchIntent("android.intent.action.MAIN")),
+          _sidebarIcon(Icons.grid_view_rounded, _openAllApps),
           _sidebarIcon(Icons.explore_rounded, _showNavPicker),
-          _sidebarIcon(Icons.music_note_rounded, () => _launchIntent("android.intent.action.MAIN", packageName: "com.android.fmradio")),
-          _sidebarIcon(Icons.dialpad_rounded, () => _launchIntent("android.intent.action.DIAL")),
-          _sidebarIcon(Icons.settings_rounded, () => _launchIntent("android.settings.SETTINGS")),
+          _sidebarIcon(Icons.music_note_rounded, _openMusicPlayer),
+          _sidebarIcon(Icons.radio_rounded, _openRadio),
+          _sidebarIcon(Icons.dialpad_rounded, _openDialer),
+          _sidebarIcon(Icons.settings_rounded, _openAndroidSettings),
         ],
       ),
     );
@@ -281,8 +415,8 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen> {
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Icon(icon, color: Colors.cyanAccent, size: 24),
+        padding: const EdgeInsets.all(6.0),
+        child: Icon(icon, color: Colors.cyanAccent, size: 23),
       ),
     );
   }
@@ -308,7 +442,7 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text("مسیر مستقیم", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                    Text("آماده جهت شروع ناوبری", style: TextStyle(color: Colors.white54, fontSize: 10)),
+                    Text("آماده جهت شروع مسیریابی", style: TextStyle(color: Colors.white54, fontSize: 10)),
                   ],
                 ),
               ),
@@ -326,8 +460,12 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen> {
                     color: const Color(0xFF040A1A),
                     child: CustomPaint(painter: PerspectiveRoadPainter()),
                   ),
-                  const Center(
-                    child: Icon(Icons.navigation_rounded, color: Colors.cyanAccent, size: 40),
+                  Center(
+                    child: IconButton(
+                      iconSize: 42,
+                      icon: const Icon(Icons.navigation_rounded, color: Colors.cyanAccent),
+                      onPressed: _openNeshan,
+                    ),
                   ),
                 ],
               ),
@@ -346,7 +484,7 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen> {
             ),
             onPressed: _showNavPicker,
             icon: const Icon(Icons.near_me_rounded, size: 18),
-            label: const Text("شروع مسیریابی", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            label: const Text("شروع مسیریابی (نشان)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           ),
         ],
       ),
@@ -480,15 +618,21 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen> {
                     const Text("پخش موسیقی", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                     IconButton(
                       icon: const Icon(Icons.folder_open_rounded, color: Colors.cyanAccent, size: 18),
-                      onPressed: () => _launchIntent("android.intent.action.MAIN", packageName: "com.android.fmradio"),
+                      onPressed: _openMusicPlayer,
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                     ),
                   ],
                 ),
                 const Spacer(),
-                const Center(
-                  child: Text("بدون آهنگ انتخابی", style: TextStyle(color: Colors.cyanAccent, fontSize: 13, fontWeight: FontWeight.bold)),
+                Center(
+                  child: InkWell(
+                    onTap: _openMusicPlayer,
+                    child: const Text(
+                      "لمس جهت باز کردن پلیر فابریک",
+                      style: TextStyle(color: Colors.cyanAccent, fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                  ),
                 ),
                 const Spacer(),
                 Row(
@@ -496,10 +640,13 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen> {
                   children: [
                     IconButton(
                       icon: const Icon(Icons.skip_previous_rounded, color: Colors.cyanAccent, size: 28),
-                      onPressed: () {},
+                      onPressed: _openMusicPlayer,
                     ),
                     GestureDetector(
-                      onTap: () => setState(() => _isPlaying = !_isPlaying),
+                      onTap: () {
+                        setState(() => _isPlaying = !_isPlaying);
+                        _openMusicPlayer();
+                      },
                       child: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
@@ -516,7 +663,7 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.skip_next_rounded, color: Colors.cyanAccent, size: 28),
-                      onPressed: () {},
+                      onPressed: _openMusicPlayer,
                     ),
                   ],
                 ),
@@ -525,7 +672,7 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen> {
           ),
         ),
         const SizedBox(height: 10),
-        // کارت وضعیت خودرو با تصویر تیبا ۲
+        // کارت خودرو با تصویر tiba2.png
         Expanded(
           flex: 5,
           child: Container(
@@ -561,7 +708,7 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen> {
   }
 }
 
-// نقاشی زاویه‌دار و دورانی سرعت‌سنج
+// رسم سرعت‌سنج عقربه‌ای نئونی
 class CurvedSpeedGaugePainter extends CustomPainter {
   final double speed;
   CurvedSpeedGaugePainter({required this.speed});
@@ -614,7 +761,7 @@ class CurvedSpeedGaugePainter extends CustomPainter {
   bool shouldRepaint(covariant CurvedSpeedGaugePainter oldDelegate) => oldDelegate.speed != speed;
 }
 
-// رسم جاده نئونی پرسپکتیو
+// رسم جاده پرسپکتیو نئونی
 class PerspectiveRoadPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -622,11 +769,9 @@ class PerspectiveRoadPainter extends CustomPainter {
       ..color = Colors.cyanAccent.withOpacity(0.3)
       ..strokeWidth = 1.5;
 
-    // خطوط کناری جاده
     canvas.drawLine(Offset(size.width * 0.4, 0), Offset(size.width * 0.1, size.height), paint);
     canvas.drawLine(Offset(size.width * 0.6, 0), Offset(size.width * 0.9, size.height), paint);
 
-    // خطوط مقطع وسط جاده
     final dashPaint = Paint()
       ..color = Colors.cyanAccent.withOpacity(0.5)
       ..strokeWidth = 2.0;
