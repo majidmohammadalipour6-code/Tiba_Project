@@ -27,21 +27,29 @@ jobs:
 
       - name: Create and Setup Project
         run: |
-          # 1. ساخت پروژه تمیز بدون ناسازگاری گریدل
+          # 1. ساخت پروژه تمیز اپلیکیشن اندروید
           flutter create -t app --platforms=android --org com.tiba.launcher tiba_project
           cd tiba_project
 
-          # 2. کپی فایل‌های پروژه شما
+          # 2. تنظیم مستقیم نسخه SDK روی 35 در build.gradle برای هماهنگی با geolocator
+          sed -i 's/compileSdk = .*/compileSdk = 35/g' android/app/build.gradle
+          sed -i 's/targetSdk = .*/targetSdk = 35/g' android/app/build.gradle
+          sed -i 's/minSdk = .*/minSdk = 21/g' android/app/build.gradle
+
+          # 3. تعریف متغیر flutter برای پلاگین‌های قدیمی‌تر گریدل
+          sed -i '/android {/a \    flutter { compileSdkVersion 35 }' android/app/build.gradle
+
+          # 4. کپی فایل‌های اختصاصی شما
           cp ../lib/main.dart lib/main.dart
           cp ../pubspec.yaml pubspec.yaml
           if [ -f ../tiba2.png ]; then
             cp ../tiba2.png tiba2.png
           fi
 
-          # 3. افزودن تگ لانچر خودرو به مانیفست
+          # 5. افزودن تگ‌های لانچر خودرو به AndroidManifest
           sed -i '/<category android:name="android.intent.category.LAUNCHER"\/>/a \                <category android:name="android.intent.category.HOME"\/>\n                <category android:name="android.intent.category.DEFAULT"\/>' android/app/src/main/AndroidManifest.xml
 
-          # 4. دریافت پکیج‌ها
+          # 6. دریافت وابستگی‌ها
           flutter pub get
 
       - name: Build APK
