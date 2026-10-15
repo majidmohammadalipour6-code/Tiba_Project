@@ -1,4 +1,4 @@
-name: Build Tiba Launcher
+name: Build Tiba Launcher APK
 
 on:
   push:
@@ -8,138 +8,102 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Java
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: 'zulu'
           java-version: '17'
 
-      - name: Set up Flutter
+      - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.3'
+          flutter-version: '3.24.0'
           channel: 'stable'
 
-      - name: Check & Ensure Android Skeleton
+      - name: Create Base Project
         run: |
-          if [ ! -d "android" ]; then
-            flutter create . --platforms=android --org com.tiba.launcher --project-name tiba_project
-          fi
-      - name: Clean Root build.gradle
-        run: |
-          python3 - <<'EOF'
-          import os
-          path = 'android/build.gradle'
-          config = """allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
+          flutter create --org com.tiba2 tiba_project
+          cd tiba_project
+          
+          # کپی فایل‌های پروژه و عکس‌ها
+          cp ../lib/main.dart lib/main.dart
+          [ -f ../tiba2.png ] && cp ../tiba2.png .
+          [ -f ../tiba2_rear.png ] && cp ../tiba2_rear.png .
+
+          # تنظیم دارایی‌ها (assets) در pubspec.yaml
+          cat << 'EOF' >> pubspec.yaml
+            assets:
+              - tiba2.png
+              - tiba2_rear.png
+          EOF
+
+          # تبدیل اپلیکیشن به لانچر پیش‌فرض در AndroidManifest.xml
+          sed -i '/<category android:name="android.intent.category.LAUNCHER"\/>/a \                <category android:name="android.intent.category.HOME"\/>\n                <category android:name="android.intent.category.DEFAULT"\/>' android/app/src/main/AndroidManifest.xml
+
+          # فعال‌سازی کامل موتور اجرای اینتنت و باز کردن برنامه‌های خارجی (نشان، موزیک، تنظیمات و...)
+          cat << 'EOF' > android/app/src/main/kotlin/com/tiba2/tiba_project/MainActivity.kt
+          package com.tiba2.tiba_project
+
+          import android.content.Intent
+          import android.net.Uri
+          import io.flutter.embedding.android.FlutterActivity
+          import io.flutter.embedding.engine.FlutterEngine
+          import io.flutter.plugin.common.MethodChannel
+
+          class MainActivity: FlutterActivity() {
+              private val CHANNEL = "com.tiba2.launcher/intent"
+
+              override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+                  super.configureFlutterEngine(flutterEngine)
+                  MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+                      if (call.method == "launchIntent") {
+                          val action = call.argument<String>("action")
+                          val uriStr = call.argument<String>("uri")
+                          val packageName = call.argument<String>("package")
+                          val category = call.argument<String>("category")
+
+                          try {
+                              val intent = if (packageName != null) {
+                                  packageManager.getLaunchIntentForPackage(packageName) ?: Intent(action ?: Intent.ACTION_MAIN)
+                              } else if (action != null) {
+                                  Intent(action)
+                              } else {
+                                  Intent(Intent.ACTION_VIEW)
+                              }
+
+                              if (uriStr != null) {
+                                  intent.data = Uri.parse(uriStr)
+                              }
+                              if (category != null) {
+                                  intent.addCategory(category)
+                              }
+
+                              intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                              startActivity(intent)
+                              result.success(true)
+                          } catch (e: Exception) {
+                              result.success(false)
+                          }
+                      } else {
+                          result.notImplemented()
+                      }
+                  }
               }
           }
-          rootProject.buildDir = '../build'
-          subprojects {
-              project.buildDir = "${rootProject.buildDir}/${project.name}"
-          }
-          subprojects {
-              project.evaluationDependsOn(':app')
-          }
-          tasks.register("clean", Delete) {
-              delete rootProject.buildDir
-          }
-          """
-          with open(path, 'w', encoding='utf-8') as f:
-              f.write(config)
           EOF
-      - name: Force Modern Kotlin Version
+
+      - name: Build APK
         run: |
-          python3 - <<'EOF'
-          import os, re
-          settings_gradle = 'android/settings.gradle'
-          if os.path.exists(settings_gradle):
-              content = open(settings_gradle, encoding='utf-8').read()
-              if 'org.jetbrains.kotlin.android' in content:
-                  content = re.sub(r'id\s+["\']org\.jetbrains\.kotlin\.android["\']\s+version\s+["\'][^"\']+["\']', 'id "org.jetbrains.kotlin.android" version "2.1.0"', content)
-              else:
-                  if 'plugins {' in content:
-                      content = content.replace('plugins {', 'plugins {\n    id "org.jetbrains.kotlin.android" version "2.1.0" apply false')
-              open(settings_gradle, 'w', encoding='utf-8').write(content)
-          EOF
-      - name: Patch AndroidManifest
-        run: |
-          python3 - <<'EOF'
-          import os
-          path = 'android/app/src/main/AndroidManifest.xml'
-          if os.path.exists(path):
-              s = open(path, encoding='utf-8').read()
-              perms = '''    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-                  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-                  <uses-permission android:name="android.permission.WAKE_LOCK" />
-                  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-                  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-                  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-                  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-              '''
-              if 'FOREGROUND_SERVICE_MEDIA_PLAYBACK' not in s:
-                  idx = s.index('>') + 1
-                  s = s[:idx] + '\n' + perms + s[idx:]
-              if 'category.HOME' not in s:
-                  s = s.replace(
-                      '<category android:name="android.intent.category.LAUNCHER" />',
-                      '<category android:name="android.intent.category.LAUNCHER" />\n'
-                      '                <category android:name="android.intent.category.HOME" />\n'
-                      '                <category android:name="android.intent.category.DEFAULT" />'
-                  )
-              if 'launchMode' not in s:
-                  s = s.replace('<activity', '<activity\n                android:launchMode="singleTask"', 1)
-              open(path, 'w', encoding='utf-8').write(s)
-          EOF
-      - name: Set SDK Properties
-        run: |
-          mkdir -p android
-          touch android/local.properties
-          echo "flutter.minSdkVersion=21" >> android/local.properties
-          echo "flutter.targetSdkVersion=35" >> android/local.properties
-          echo "flutter.compileSdkVersion=35" >> android/local.properties
-      - name: Fetch Dependencies
-        run: |
+          cd tiba_project
           flutter pub get
-      - name: Fix and Patch All Pub Cache Plugins
-        run: |
-          python3 - <<'EOF'
-          import os, glob, re
-          cache_dir = os.path.expanduser('~/.pub-cache/hosted/pub.dev')
-          gradle_files = glob.glob(f'{cache_dir}/**/android/build.gradle', recursive=True)
-          for g_file in gradle_files:
-              try:
-                  with open(g_file, 'r', encoding='utf-8') as f:
-                      txt = f.read()
-                  original = txt
-                  txt = re.sub(r'project\.afterEvaluate\s*\{[^}]*\}', '', txt, flags=re.DOTALL)
-                  txt = re.sub(r'(?:android\.)?flutter\.compileSdkVersion', '35', txt)
-                  txt = re.sub(r'(?:android\.)?flutter\.minSdkVersion', '21', txt)
-                  txt = re.sub(r'(?:android\.)?flutter\.targetSdkVersion', '35', txt)
-                  txt = re.sub(r'flutter\[[\'"]compileSdkVersion[\'"]\]', '35', txt)
-                  txt = re.sub(r'flutter\[[\'"]minSdkVersion[\'"]\]', '21', txt)
-                  txt = re.sub(r'flutter\[[\'"]targetSdkVersion[\'"]\]', '35', txt)
-                  if 'compileSdkVersion' not in txt and 'android {' in txt:
-                      txt = txt.replace('android {', 'android {\n    compileSdkVersion 35\n', 1)
-                  if txt != original:
-                      with open(g_file, 'w', encoding='utf-8') as f:
-                          f.write(txt)
-                      print(f"Successfully patched: {os.path.basename(os.path.dirname(os.path.dirname(g_file)))}")
-              except Exception as e:
-                  print(f"Failed to patch {g_file}: {e}")
-          EOF
-      - name: Build Launcher APK
-        run: |
           flutter build apk --release
-      - name: Upload APK
+
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Tiba2_Launcher_App
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: app-release
+          path: tiba_project/build/app/outputs/flutter-apk/app-release.apk
