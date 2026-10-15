@@ -1,4 +1,4 @@
-name: Build Tiba Launcher
+name: Build Tiba Launcher APK
 
 on:
   push:
@@ -10,161 +10,50 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Java
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: 'zulu'
           java-version: '17'
 
-      - name: Set up Flutter
+      - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.24.3'
           channel: 'stable'
 
-      - name: Check & Ensure Android Skeleton
+      - name: Configure Gradle Repositories
         run: |
-          if [ ! -d "android" ]; then
-            flutter create . --platforms=android --org com.tiba.launcher --project-name tiba_project
-          fi
-
-      - name: Clean Root build.gradle
-        run: |
-          python3 - <<'EOF'
-          import os
-
-          path = 'android/build.gradle'
-          config = """allprojects {
+          # اصلاح مخازن گریدل و افزودن مخزن گوگل و mavenCentral
+          mkdir -p ~/.gradle
+          cat << 'EOF' > ~/.gradle/init.gradle
+          allprojects {
+              buildscript {
+                  repositories {
+                      google()
+                      mavenCentral()
+                      gradlePluginPortal()
+                  }
+              }
               repositories {
                   google()
                   mavenCentral()
+                  gradlePluginPortal()
               }
           }
-
-          rootProject.buildDir = '../build'
-          subprojects {
-              project.buildDir = "${rootProject.buildDir}/${project.name}"
-          }
-          subprojects {
-              project.evaluationDependsOn(':app')
-          }
-
-          tasks.register("clean", Delete) {
-              delete rootProject.buildDir
-          }
-          """
-          with open(path, 'w', encoding='utf-8') as f:
-              f.write(config)
           EOF
 
-      - name: Force Modern Kotlin Version
-        run: |
-          python3 - <<'EOF'
-          import os, re
+      - name: Install Dependencies
+        run: flutter pub get
 
-          settings_gradle = 'android/settings.gradle'
-          if os.path.exists(settings_gradle):
-              content = open(settings_gradle, encoding='utf-8').read()
-              if 'org.jetbrains.kotlin.android' in content:
-                  content = re.sub(r'id\s+["\']org\.jetbrains\.kotlin\.android["\']\s+version\s+["\'][^"\']+["\']', 'id "org.jetbrains.kotlin.android" version "2.1.0"', content)
-              else:
-                  if 'plugins {' in content:
-                      content = content.replace('plugins {', 'plugins {\n    id "org.jetbrains.kotlin.android" version "2.1.0" apply false')
-              open(settings_gradle, 'w', encoding='utf-8').write(content)
-          EOF
+      - name: Build APK
+        run: flutter build apk --release
 
-      - name: Patch AndroidManifest
-        run: |
-          python3 - <<'EOF'
-          import os
-          path = 'android/app/src/main/AndroidManifest.xml'
-          if os.path.exists(path):
-              s = open(path, encoding='utf-8').read()
-              perms = '''    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-                  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-                  <uses-permission android:name="android.permission.WAKE_LOCK" />
-                  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-                  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-                  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-                  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-              '''
-              if 'FOREGROUND_SERVICE_MEDIA_PLAYBACK' not in s:
-                  idx = s.index('>') + 1
-                  s = s[:idx] + '\n' + perms + s[idx:]
-
-              if 'category.HOME' not in s:
-                  s = s.replace(
-                      '<category android:name="android.intent.category.LAUNCHER" />',
-                      '<category android:name="android.intent.category.LAUNCHER" />\n'
-                      '                <category android:name="android.intent.category.HOME" />\n'
-                      '                <category android:name="android.intent.category.DEFAULT" />'
-                  )
-
-              if 'launchMode' not in s:
-                  s = s.replace('<activity', '<activity\n                android:launchMode="singleTask"', 1)
-
-              open(path, 'w', encoding='utf-8').write(s)
-          EOF
-
-      - name: Set SDK Properties
-        run: |
-          mkdir -p android
-          touch android/local.properties
-          echo "flutter.minSdkVersion=21" >> android/local.properties
-          echo "flutter.targetSdkVersion=35" >> android/local.properties
-          echo "flutter.compileSdkVersion=35" >> android/local.properties
-
-      - name: Fetch Dependencies
-        run: |
-          flutter pub get
-
-      - name: Fix and Patch All Pub Cache Plugins
-        run: |
-          python3 - <<'EOF'
-          import os, glob, re
-
-          cache_dir = os.path.expanduser('~/.pub-cache/hosted/pub.dev')
-          gradle_files = glob.glob(f'{cache_dir}/**/android/build.gradle', recursive=True)
-
-          for g_file in gradle_files:
-              try:
-                  with open(g_file, 'r', encoding='utf-8') as f:
-                      txt = f.read()
-
-                  original = txt
-
-                  # حذف لیسنرهای ارزیابی که باعث کرش و substring روی null می‌شوند
-                  txt = re.sub(r'project\.afterEvaluate\s*\{[^}]*\}', '', txt, flags=re.DOTALL)
-
-                  # جایگزینی مستقیم هر نوع ارجاع به android.flutter یا flutter.*
-                  txt = re.sub(r'(?:android\.)?flutter\.compileSdkVersion', '35', txt)
-                  txt = re.sub(r'(?:android\.)?flutter\.minSdkVersion', '21', txt)
-                  txt = re.sub(r'(?:android\.)?flutter\.targetSdkVersion', '35', txt)
-                  txt = re.sub(r'flutter\[[\'"]compileSdkVersion[\'"]\]', '35', txt)
-                  txt = re.sub(r'flutter\[[\'"]minSdkVersion[\'"]\]', '21', txt)
-                  txt = re.sub(r'flutter\[[\'"]targetSdkVersion[\'"]\]', '35', txt)
-
-                  # اگر compileSdkVersion تعریف نشده باشد، تزریق مقدار صریح
-                  if 'compileSdkVersion' not in txt and 'android {' in txt:
-                      txt = txt.replace('android {', 'android {\n    compileSdkVersion 35\n', 1)
-
-                  if txt != original:
-                      with open(g_file, 'w', encoding='utf-8') as f:
-                          f.write(txt)
-                      print(f"Successfully patched: {os.path.basename(os.path.dirname(os.path.dirname(g_file)))}")
-              except Exception as e:
-                  print(f"Failed to patch {g_file}: {e}")
-          EOF
-
-      - name: Build Launcher APK
-        run: |
-          flutter build apk --release
-
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Tiba2_Launcher_App
+          name: Tiba2-CyberHUD-Launcher
           path: build/app/outputs/flutter-apk/app-release.apk
