@@ -1,26 +1,21 @@
 name: tiba_project
-description: "Tiba 2 Cyber Launcher Dashboard"
-publish_to: "none"
+description: "A Cyber HUD Car Launcher for Tiba 2"
+publish_to: 'none'
+
 version: 1.0.0+1
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
-
-  # Permissions + file picking
   permission_handler: ^11.3.1
   file_picker: ^8.1.3
-
-  # GPS speed stream + calibration storage + open maps apps
   geolocator: ^13.0.1
   shared_preferences: ^2.3.2
   url_launcher: ^6.3.0
-
-  # Optional: only if your main.dart uses AudioPlayer for playback
   audioplayers: ^6.1.0
 
 dev_dependencies:
@@ -30,7 +25,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-
   assets:
     - tiba2.png
     - tiba2_rear.png
