@@ -41,19 +41,33 @@ jobs:
             cp ../tiba2_rear.png ./
           fi
 
-      - name: Force Kotlin Version Globally
+      - name: Configure Gradle and SDK Versions
         run: |
           cd tiba_project
-          
-          # اعمال نسخه کاتلین 1.9.22 برای تمامی ساب‌پروژه‌ها و افزونه‌ها در سطح گرادل ریشه
+
+          # 1. تنظیم دقیق نسخه کاتلین در settings.gradle
+          SETTINGS="android/settings.gradle"
+          if [ -f "$SETTINGS" ]; then
+            sed -i -E 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.22"/' "$SETTINGS" || true
+            sed -i -E "s/id 'org.jetbrains.kotlin.android' version '[^']*'/id 'org.jetbrains.kotlin.android' version '1.9.22'/" "$SETTINGS" || true
+          fi
+
+          # 2. ارتقای compileSdk به 35 و buildToolsVersion به 34.0.0 برای رفع خطای aapt2 و audioplayers
+          APP_GRADLE="android/app/build.gradle"
+          if [ -f "$APP_GRADLE" ]; then
+            sed -i 's/compileSdk = .*/compileSdk = 35/' "$APP_GRADLE" || true
+            sed -i 's/compileSdkVersion .*/compileSdkVersion 35/' "$APP_GRADLE" || true
+            sed -i 's/targetSdkVersion .*/targetSdkVersion 34/' "$APP_GRADLE" || true
+            sed -i 's/targetSdk = .*/targetSdk = 34/' "$APP_GRADLE" || true
+            sed -i '/android {/a \    buildToolsVersion "34.0.0"' "$APP_GRADLE" || true
+          fi
+
+          # 3. اطمینان از اعمال کاتلین 1.9.22 در build.gradle ریشه
           BUILD_GRADLE="android/build.gradle"
           if [ -f "$BUILD_GRADLE" ]; then
+            sed -i "s/ext.kotlin_version = .*/ext.kotlin_version = '1.9.22'/" "$BUILD_GRADLE" || true
             echo "
           allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
               configurations.all {
                   resolutionStrategy.eachDependency { details ->
                       if (details.requested.group == 'org.jetbrains.kotlin') {
@@ -63,12 +77,6 @@ jobs:
               }
           }
           " >> "$BUILD_GRADLE"
-          fi
-
-          # اصلاح در settings.gradle
-          SETTINGS="android/settings.gradle"
-          if [ -f "$SETTINGS" ]; then
-            sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.22"/' "$SETTINGS" || true
           fi
 
       - name: Configure Android Manifest
@@ -315,7 +323,7 @@ jobs:
       - name: Build APK
         run: |
           cd tiba_project
-          flutter build apk --release
+          flutter build apk --release --no-tree-shake-icons
 
       - name: Upload Launcher APK
         uses: actions/upload-artifact@v4
