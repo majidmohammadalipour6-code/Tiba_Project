@@ -1110,6 +1110,174 @@ class CyberArcSpeedometerPainter extends CustomPainter {
         center.dx + (radius - 5) * math.cos(angle),
         center.dy + (radius - 5) * math.sin(angle),
       );
-      final p2 = Offset(
+            final p2 = Offset(
         center.dx + (radius - 5 - tickLength) * math.cos(angle),
-        center.dy + (
+        center.dy + (radius - 5 - tickLength) * math.sin(angle),
+      );
+
+      final tickPaint = Paint()
+        ..color = neon.withOpacity(isMajor ? 0.85 : 0.45)
+        ..strokeWidth = isMajor ? 2.0 : 1.0
+        ..strokeCap = StrokeCap.round;
+
+      canvas.drawLine(p1, p2, tickPaint);
+
+      if (isMajor) {
+        final label = TextPainter(
+          text: TextSpan(
+            text: '${i * 10}',
+            style: TextStyle(
+              color: neon.withOpacity(0.85),
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+
+        final labelPosition = Offset(
+          center.dx +
+              (radius - 24) * math.cos(angle) -
+              label.width / 2,
+          center.dy +
+              (radius - 24) * math.sin(angle) -
+              label.height / 2,
+        );
+        label.paint(canvas, labelPosition);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CyberArcSpeedometerPainter oldDelegate) {
+    return oldDelegate.speed != speed || oldDelegate.neon != neon;
+  }
+}
+
+class EqualizerPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+
+  EqualizerPainter({
+    required this.progress,
+    required this.color,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const barCount = 5;
+    const gap = 3.0;
+    final barWidth = (size.width - gap * (barCount - 1)) / barCount;
+
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    for (int i = 0; i < barCount; i++) {
+      final wave =
+          (math.sin(progress * math.pi * 2 + i * 1.3) + 1) / 2;
+      final barHeight = 4.0 + wave * (size.height - 4.0);
+      final rect = Rect.fromLTWH(
+        i * (barWidth + gap),
+        size.height - barHeight,
+        barWidth,
+        barHeight,
+      );
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(rect, const Radius.circular(2)),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant EqualizerPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.color != color;
+  }
+}
+
+class RealisticCyberRoadPainter extends CustomPainter {
+  final double progress;
+  final Color neon;
+
+  RealisticCyberRoadPainter({
+    required this.progress,
+    required this.neon,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final width = size.width;
+    final height = size.height;
+    final centerX = width / 2;
+
+    final background = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Color(0xFF080D19),
+          Color(0xFF101B2D),
+          Color(0xFF050912),
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, width, height));
+
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, width, height),
+      background,
+    );
+
+    final road = Path()
+      ..moveTo(width * 0.43, 0)
+      ..lineTo(width * 0.57, 0)
+      ..lineTo(width * 0.96, height)
+      ..lineTo(width * 0.04, height)
+      ..close();
+
+    canvas.drawPath(
+      road,
+      Paint()..color = const Color(0xFF111827),
+    );
+
+    final edgeGlow = Paint()
+      ..color = neon.withOpacity(0.25)
+      ..strokeWidth = 7
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+
+    final edgeLine = Paint()
+      ..color = neon.withOpacity(0.8)
+      ..strokeWidth = 1.5;
+
+    for (final side in [-1.0, 1.0]) {
+      final top = Offset(centerX + side * width * 0.07, 0);
+      final bottom = Offset(centerX + side * width * 0.46, height);
+      canvas.drawLine(top, bottom, edgeGlow);
+      canvas.drawLine(top, bottom, edgeLine);
+    }
+
+    final markerPaint = Paint()
+      ..color = Colors.white.withOpacity(0.75)
+      ..strokeCap = StrokeCap.round;
+
+    for (int i = 0; i < 10; i++) {
+      final t = ((i + progress) / 10) % 1.0;
+      final y = height * (0.05 + 0.95 * t * t);
+      final markerLength = 2.0 + 12.0 * t;
+      markerPaint.strokeWidth = 1.0 + 2.0 * t;
+
+      canvas.drawLine(
+        Offset(centerX, y),
+        Offset(centerX, math.min(height, y + markerLength)),
+        markerPaint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant RealisticCyberRoadPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.neon != neon;
+  }
+}
