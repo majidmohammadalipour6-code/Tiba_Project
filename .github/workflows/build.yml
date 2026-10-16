@@ -41,6 +41,18 @@ jobs:
             cp ../tiba2_rear.png ./
           fi
 
+      - name: Configure Kotlin and Android Settings
+        run: |
+          cd tiba_project
+
+          # ارتقای نسخه کاتلین برای سازگاری کامل با پکیج‌ها
+          BUILD_GRADLE="android/build.gradle"
+          sed -i "s/ext.kotlin_version = .*/ext.kotlin_version = '1.9.22'/" "$BUILD_GRADLE" || true
+
+          APP_GRADLE="android/app/build.gradle"
+          sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 34/' "$APP_GRADLE" || true
+          sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 34/' "$APP_GRADLE" || true
+
       - name: Configure Android Manifest
         run: |
           cd tiba_project
@@ -62,7 +74,6 @@ jobs:
           package com.tiba2.tiba_project
 
           import android.Manifest
-          import android.content.ComponentName
           import android.content.Context
           import android.content.Intent
           import android.content.pm.PackageManager
@@ -73,7 +84,6 @@ jobs:
           import android.net.Uri
           import android.os.Build
           import android.os.Bundle
-          import android.os.SystemClock
           import android.provider.MediaStore
           import android.provider.Settings
           import android.view.KeyEvent
@@ -135,33 +145,10 @@ jobs:
                               }
                               "radio" -> {
                                   val radioPackages = listOf(
-                                      "com.syu.radio",
-                                      "com.microntek.radio",
-                                      "com.autochips.radio",
-                                      "com.ts.fmradio",
-                                      "com.tw.radio",
-                                      "com.ankai.cardvd.radio",
-                                      "com.hcn.radio",
-                                      "com.android.fmradio",
-                                      "com.car.radio",
-                                      "com.forfan.fmradio"
+                                      "com.syu.radio", "com.microntek.radio", "com.autochips.radio",
+                                      "com.ts.fmradio", "com.tw.radio", "com.android.fmradio"
                                   )
                                   var launched = launchFirstAvailable(radioPackages)
-                                  if (!launched) {
-                                      val radioActions = listOf(
-                                          "android.intent.action.MAIN_RADIO",
-                                          "com.microntek.radio",
-                                          "com.syu.radio"
-                                      )
-                                      for (act in radioActions) {
-                                          try {
-                                              val intent = Intent(act).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
-                                              startActivity(intent)
-                                              launched = true
-                                              break
-                                          } catch (e: Exception) {}
-                                      }
-                                  }
                                   if (!launched) {
                                       tryLaunch(Intent(Intent.ACTION_MAIN).also { it.addCategory(Intent.CATEGORY_APP_MUSIC) }, result)
                                   } else {
@@ -170,11 +157,7 @@ jobs:
                               }
                               "phone" -> {
                                   val phonePackages = listOf(
-                                      "com.syu.bt",
-                                      "com.microntek.bluelet",
-                                      "com.ts.bt",
-                                      "com.tw.bt",
-                                      "com.android.dialer"
+                                      "com.syu.bt", "com.microntek.bluelet", "com.ts.bt", "com.tw.bt", "com.android.dialer"
                                   )
                                   var launched = launchFirstAvailable(phonePackages)
                                   if (!launched) {
@@ -200,12 +183,7 @@ jobs:
                               }
                               "music" -> {
                                   val musicPackages = listOf(
-                                      "com.syu.music",
-                                      "com.microntek.music",
-                                      "com.ts.music",
-                                      "com.tw.music",
-                                      "com.autochips.music",
-                                      "com.android.music"
+                                      "com.syu.music", "com.microntek.music", "com.ts.music", "com.tw.music"
                                   )
                                   val launched = launchFirstAvailable(musicPackages)
                                   if (!launched) {
