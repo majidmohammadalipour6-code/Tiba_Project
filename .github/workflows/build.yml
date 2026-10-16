@@ -41,33 +41,40 @@ jobs:
             cp ../tiba2_rear.png ./
           fi
 
-      - name: Configure Gradle and SDK Versions
+      - name: Fix Kotlin & Android SDK Configuration
         run: |
           cd tiba_project
 
-          # 1. تنظیم دقیق نسخه کاتلین در settings.gradle
+          # 1. تثبیت نسخه کاتلین در settings.gradle
           SETTINGS="android/settings.gradle"
           if [ -f "$SETTINGS" ]; then
             sed -i -E 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.22"/' "$SETTINGS" || true
             sed -i -E "s/id 'org.jetbrains.kotlin.android' version '[^']*'/id 'org.jetbrains.kotlin.android' version '1.9.22'/" "$SETTINGS" || true
           fi
 
-          # 2. ارتقای compileSdk به 35 و buildToolsVersion به 34.0.0 برای رفع خطای aapt2 و audioplayers
+          # 2. تنظیم SDK پایدار ۳۴ (رفع خطای android-35 aapt2)
           APP_GRADLE="android/app/build.gradle"
           if [ -f "$APP_GRADLE" ]; then
-            sed -i 's/compileSdk = .*/compileSdk = 35/' "$APP_GRADLE" || true
-            sed -i 's/compileSdkVersion .*/compileSdkVersion 35/' "$APP_GRADLE" || true
+            sed -i 's/compileSdk = .*/compileSdk = 34/' "$APP_GRADLE" || true
+            sed -i 's/compileSdkVersion .*/compileSdkVersion 34/' "$APP_GRADLE" || true
             sed -i 's/targetSdkVersion .*/targetSdkVersion 34/' "$APP_GRADLE" || true
             sed -i 's/targetSdk = .*/targetSdk = 34/' "$APP_GRADLE" || true
-            sed -i '/android {/a \    buildToolsVersion "34.0.0"' "$APP_GRADLE" || true
+            sed -i 's/buildToolsVersion .*/buildToolsVersion "34.0.0"/' "$APP_GRADLE" || true
           fi
 
-          # 3. اطمینان از اعمال کاتلین 1.9.22 در build.gradle ریشه
+          # 3. رفع خطای metadata mismatch کاتلین در سطح تمام ماژول‌ها و پکیج‌ها
           BUILD_GRADLE="android/build.gradle"
           if [ -f "$BUILD_GRADLE" ]; then
             sed -i "s/ext.kotlin_version = .*/ext.kotlin_version = '1.9.22'/" "$BUILD_GRADLE" || true
-            echo "
+            cat >> "$BUILD_GRADLE" << 'EOF'
+
           allprojects {
+              tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+                  kotlinOptions {
+                      jvmTarget = "1.8"
+                      freeCompilerArgs += ["-Xskip-metadata-version-check"]
+                  }
+              }
               configurations.all {
                   resolutionStrategy.eachDependency { details ->
                       if (details.requested.group == 'org.jetbrains.kotlin') {
@@ -76,7 +83,7 @@ jobs:
                   }
               }
           }
-          " >> "$BUILD_GRADLE"
+          EOF
           fi
 
       - name: Configure Android Manifest
