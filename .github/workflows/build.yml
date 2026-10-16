@@ -52,11 +52,11 @@ jobs:
 
           MANIFEST="android/app/src/main/AndroidManifest.xml"
 
-          sed -i 's/<application/<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"\/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"\/>\n    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"\/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"\/>\n    <application/' "$MANIFEST"
+          sed -i 's/<application/<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"\/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"\/>\n    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"\/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"\/>\n    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"\/>\n    <application/' "$MANIFEST"
 
           sed -i 's/<category android:name="android.intent.category.LAUNCHER"\/>/<category android:name="android.intent.category.LAUNCHER"\/>\n                <category android:name="android.intent.category.HOME"\/>\n                <category android:name="android.intent.category.DEFAULT"\/>/' "$MANIFEST"
 
-      - name: Configure Native GPS and Actions
+      - name: Configure Complete Vehicle Native Actions
         run: |
           cd tiba_project
 
@@ -67,6 +67,7 @@ jobs:
           package com.tiba2.tiba_project
 
           import android.Manifest
+          import android.content.ComponentName
           import android.content.Context
           import android.content.Intent
           import android.content.pm.PackageManager
@@ -77,6 +78,7 @@ jobs:
           import android.net.Uri
           import android.os.Build
           import android.os.Bundle
+          import android.os.SystemClock
           import android.provider.MediaStore
           import android.provider.Settings
           import android.view.KeyEvent
@@ -111,32 +113,60 @@ jobs:
                               }
                               "nav" -> {
                                   var launched = false
-                                  if (pkg.isNotEmpty()) {
-                                      launched = launchPackage(pkg)
+                                  if (pkg.isNotEmpty() && launchPackage(pkg)) {
+                                      launched = true
+                                  }
+                                  if (!launched && (pkg.contains("neshan") || pkg.isEmpty())) {
+                                      launched = launchPackage("ir.neshan.sp") || launchPackage("org.neshan.maps.and.navi")
+                                  }
+                                  if (!launched && (pkg.contains("balad") || pkg.isEmpty())) {
+                                      launched = launchPackage("ir.balad.navigation")
                                   }
                                   if (!launched) {
-                                      launched = launchFirstAvailable(listOf(
-                                          "ir.neshan.sp",
-                                          "org.neshan.maps.and.navi",
-                                          "ir.balad.navigation",
-                                          "com.google.android.apps.maps",
-                                          "com.waze"
-                                      ))
-                                  }
-                                  if (!launched) {
-                                      tryLaunch(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=")), result)
+                                      val mapIntent = Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=")).apply {
+                                          flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                      }
+                                      try {
+                                          val chooser = Intent.createChooser(mapIntent, "انتخاب مسیریاب")
+                                          chooser.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                          startActivity(chooser)
+                                          result.success(true)
+                                      } catch (e: Exception) {
+                                          result.success(false)
+                                      }
                                   } else {
                                       result.success(true)
                                   }
                               }
                               "radio" -> {
-                                  val launched = launchFirstAvailable(listOf(
+                                  val radioPackages = listOf(
                                       "com.syu.radio",
                                       "com.microntek.radio",
                                       "com.autochips.radio",
+                                      "com.ts.fmradio",
+                                      "com.tw.radio",
+                                      "com.ankai.cardvd.radio",
+                                      "com.hcn.radio",
                                       "com.android.fmradio",
-                                      "com.car.radio"
-                                  ))
+                                      "com.car.radio",
+                                      "com.forfan.fmradio"
+                                  )
+                                  var launched = launchFirstAvailable(radioPackages)
+                                  if (!launched) {
+                                      val radioActions = listOf(
+                                          "android.intent.action.MAIN_RADIO",
+                                          "com.microntek.radio",
+                                          "com.syu.radio"
+                                      )
+                                      for (act in radioActions) {
+                                          try {
+                                              val intent = Intent(act).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
+                                              startActivity(intent)
+                                              launched = true
+                                              break
+                                          } catch (e: Exception) {}
+                                      }
+                                  }
                                   if (!launched) {
                                       tryLaunch(Intent(Intent.ACTION_MAIN).also { it.addCategory(Intent.CATEGORY_APP_MUSIC) }, result)
                                   } else {
@@ -144,16 +174,20 @@ jobs:
                                   }
                               }
                               "phone" -> {
-                                  val intent = Intent(Intent.ACTION_DIAL)
-                                  val launched = tryLaunch(intent, null)
+                                  val phonePackages = listOf(
+                                      "com.syu.bt",
+                                      "com.microntek.bluelet",
+                                      "com.ts.bt",
+                                      "com.tw.bt",
+                                      "com.android.dialer"
+                                  )
+                                  var launched = launchFirstAvailable(phonePackages)
                                   if (!launched) {
-                                      launchFirstAvailable(listOf(
-                                          "com.syu.bt",
-                                          "com.microntek.bluelet",
-                                          "com.android.dialer"
-                                      ))
+                                      val intent = Intent(Intent.ACTION_DIAL).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
+                                      tryLaunch(intent, result)
+                                  } else {
+                                      result.success(true)
                                   }
-                                  result.success(true)
                               }
                               "apps" -> {
                                   try {
@@ -161,18 +195,24 @@ jobs:
                                           addCategory(Intent.CATEGORY_LAUNCHER)
                                           flags = Intent.FLAG_ACTIVITY_NEW_TASK
                                       }
-                                      startActivity(Intent.createChooser(intent, "برنامه‌ها"))
+                                      val chooser = Intent.createChooser(intent, "تمام برنامه‌ها")
+                                      chooser.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                      startActivity(chooser)
                                       result.success(true)
                                   } catch (e: Exception) {
                                       result.success(false)
                                   }
                               }
                               "music" -> {
-                                  val launched = launchFirstAvailable(listOf(
+                                  val musicPackages = listOf(
                                       "com.syu.music",
                                       "com.microntek.music",
+                                      "com.ts.music",
+                                      "com.tw.music",
+                                      "com.autochips.music",
                                       "com.android.music"
-                                  ))
+                                  )
+                                  val launched = launchFirstAvailable(musicPackages)
                                   if (!launched) {
                                       tryLaunch(Intent(MediaStore.INTENT_ACTION_MUSIC_PLAYER), result)
                                   } else {
@@ -235,13 +275,18 @@ jobs:
               }
 
               private fun launchPackage(pkg: String): Boolean {
-                  val intent = packageManager.getLaunchIntentForPackage(pkg)
-                  if (intent != null) {
-                      intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                      startActivity(intent)
-                      return true
+                  return try {
+                      val intent = packageManager.getLaunchIntentForPackage(pkg)
+                      if (intent != null) {
+                          intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                          startActivity(intent)
+                          true
+                      } else {
+                          false
+                      }
+                  } catch (e: Exception) {
+                      false
                   }
-                  return false
               }
 
               private fun launchFirstAvailable(packages: List<String>): Boolean {
