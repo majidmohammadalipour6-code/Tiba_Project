@@ -42,41 +42,44 @@ jobs:
             cp ../tiba2_rear.png ./
           fi
 
-      - name: Configure Android Build
+      -       - name: Configure Android Build
         run: |
           cd tiba_project
 
-          echo "===== Gradle configuration ====="
-
-          cat android/settings.gradle
-
-          cat android/build.gradle
-
           echo "===== Configure Kotlin ====="
 
+          SETTINGS="android/settings.gradle"
+
           sed -i -E \
-            's/version "[0-9.]+"/version "1.9.22"/' \
-            android/settings.gradle
+            's/(id "org\.jetbrains\.kotlin\.android" version ")[^"]+"/\11.9.22"/' \
+            "$SETTINGS"
 
           echo "===== Configure Android SDK ====="
 
-          sed -i -E \
-            's/compileSdk = flutter.compileSdkVersion/compileSdk = 34/' \
-            android/app/build.gradle
+          APP_GRADLE="android/app/build.gradle"
 
           sed -i -E \
-            's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 34/' \
-            android/app/build.gradle
+            's/compileSdk = flutter\.compileSdkVersion/compileSdk = 34/' \
+            "$APP_GRADLE"
 
           sed -i -E \
-            's/targetSdk = flutter.targetSdkVersion/targetSdk = 34/' \
-            android/app/build.gradle
+            's/compileSdkVersion flutter\.compileSdkVersion/compileSdkVersion 34/' \
+            "$APP_GRADLE"
 
           sed -i -E \
-            's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 34/' \
-            android/app/build.gradle
+            's/targetSdk = flutter\.targetSdkVersion/targetSdk = 34/' \
+            "$APP_GRADLE"
 
-                    echo "===== Install Android SDK 34 ====="
+          sed -i -E \
+            's/targetSdkVersion flutter\.targetSdkVersion/targetSdkVersion 34/' \
+            "$APP_GRADLE"
+
+          echo "===== Verify Android plugin versions ====="
+
+          grep -n 'com.android.application' "$SETTINGS"
+          grep -n 'org.jetbrains.kotlin.android' "$SETTINGS"
+
+          echo "===== Install Android SDK 34 ====="
 
           SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
 
@@ -85,9 +88,7 @@ jobs:
           fi
 
           if [ -z "$SDKMANAGER" ] || [ ! -f "$SDKMANAGER" ]; then
-            echo "ERROR: sdkmanager was not found in Android SDK."
-            echo "ANDROID_HOME=${ANDROID_HOME}"
-            ls -la "${ANDROID_HOME}/cmdline-tools" || true
+            echo "ERROR: sdkmanager not found"
             exit 1
           fi
 
@@ -96,15 +97,6 @@ jobs:
           "$SDKMANAGER" \
             "platforms;android-34" \
             "build-tools;34.0.0"
-
-          echo "===== Verify configuration ====="
-
-          grep -n "kotlin.android" android/settings.gradle || true
-
-          grep -n "compileSdk" android/app/build.gradle || true
-
-          grep -n "targetSdk" android/app/build.gradle || true
-
       - name: Configure Android Manifest
         run: |
           cd tiba_project
