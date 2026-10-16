@@ -38,10 +38,15 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen>
     with SingleTickerProviderStateMixin {
-  static const MethodChannel _platform =
+  // --- Native channels (keep both: we will try both protocols)
+  static const MethodChannel _platformLegacy =
       MethodChannel('com.tiba.launcher/methods');
   static const EventChannel _speedEvent =
       EventChannel('com.tiba.launcher/speed');
+
+  // Common channel used in many “actions/open” patterns (fallback-friendly)
+  static const MethodChannel _platformActions =
+      MethodChannel('com.tiba2.launcher/actions');
 
   double _speed = 0.0;
   double _calibrationFactor = 1.0;
@@ -49,6 +54,10 @@ class _DashboardScreenState extends State<DashboardScreen>
   StreamSubscription? _speedSubscription;
 
   late AnimationController _roadAnimController;
+
+  // رنگ CarPlay/HUD
+  static const Color _neon = Color(0xFF00E5FF);
+  static const Color _neon2 = Color(0xFF00F5D4);
 
   @override
   void initState() {
@@ -94,12 +103,45 @@ class _DashboardScreenState extends State<DashboardScreen>
     super.dispose();
   }
 
-  Future<void> _invokeNative(String method, [Map<String, dynamic>? args]) async {
+  // ---------- Native invoke helpers ----------
+  Future<bool> _tryInvoke(MethodChannel ch, String method,
+      [Map<String, dynamic>? args]) async {
     try {
-      await _platform.invokeMethod(method, args ?? <String, dynamic>{});
+      await ch.invokeMethod(method, args ?? <String, dynamic>{});
+      return true;
     } on PlatformException catch (e) {
-      debugPrint("Native invoke error: ${e.message}");
+      debugPrint("Native invoke failed on ${ch.name}::$method => ${e.message}");
+      return false;
+    } catch (e) {
+      debugPrint("Native invoke unexpected error on ${ch.name}::$method => $e");
+      return false;
     }
+  }
+
+  /// Universal action opener:
+  /// 1) Tries actions-channel pattern: invokeMethod('open', {action: ...})
+  /// 2) Falls back to your legacy direct methods: openSettings/openNav/openRadio/openPhone/openApps
+  Future<void> _openAction(String action,
+      {Map<String, dynamic>? extras, String? legacyMethod}) async {
+    // Try “actions/open” protocol first (common in the golden MainActivity setups)
+    final ok = await _tryInvoke(_platformActions, 'open', <String, dynamic>{
+      'action': action,
+      if (extras != null) ...extras,
+    });
+
+    if (ok) return;
+
+    // Fallback to legacy protocol (your current Dart code)
+    if (legacyMethod != null) {
+      await _tryInvoke(_platformLegacy, legacyMethod, extras);
+      return;
+    }
+
+    // last resort: try legacy with same 'open' signature
+    await _tryInvoke(_platformLegacy, 'open', <String, dynamic>{
+      'action': action,
+      if (extras != null) ...extras,
+    });
   }
 
   void _showCalibrationDialog() {
@@ -111,8 +153,8 @@ class _DashboardScreenState extends State<DashboardScreen>
           builder: (context, setDialogState) {
             return AlertDialog(
               backgroundColor: const Color(0xFF101728),
-              title: const Text('کالیبراسیون و GPS',
-                  style: TextStyle(color: Colors.cyanAccent)),
+              title: Text('کالیبراسیون و GPS',
+                  style: TextStyle(color: _neon)),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -125,7 +167,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     min: 0.7,
                     max: 1.3,
                     divisions: 12,
-                    activeColor: Colors.cyanAccent,
+                    activeColor: _neon,
                     onChanged: (val) {
                       setDialogState(() => tempFactor = val);
                       setState(() => _calibrationFactor = val);
@@ -134,13 +176,17 @@ class _DashboardScreenState extends State<DashboardScreen>
                   const SizedBox(height: 10),
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.cyan.withOpacity(0.2),
-                      side: const BorderSide(color: Colors.cyanAccent),
+                      backgroundColor: _neon.withOpacity(0.2),
+                      side: BorderSide(color: _neon.withOpacity(0.9)),
                     ),
-                    onPressed: () {
-                      _invokeNative('openLocationSettings');
+                    onPressed: () async {
+                      // try both variants
+                      await _openAction(
+                        'location_settings',
+                        legacyMethod: 'openLocationSettings',
+                      );
                     },
-                    icon: const Icon(Icons.location_on, color: Colors.cyanAccent),
+                    icon: Icon(Icons.location_on, color: _neon),
                     label: const Text('تنظیمات موقعیت مکانی مانیتور',
                         style: TextStyle(color: Colors.white)),
                   )
@@ -149,8 +195,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('بستن',
-                      style: TextStyle(color: Colors.cyanAccent)),
+                  child: Text('بستن', style: TextStyle(color: _neon)),
                 ),
               ],
             );
@@ -171,17 +216,17 @@ class _DashboardScreenState extends State<DashboardScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('انتخاب اپلیکیشن مسیریاب پیش‌فرض',
+              Text('انتخاب اپلیکیشن مسیریاب پیش‌فرض',
                   style: TextStyle(
-                      color: Colors.cyanAccent,
+                      color: _neon,
                       fontSize: 16,
                       fontWeight: FontWeight.bold)),
-              const Divider(color: Colors.cyanAccent),
+              Divider(color: _neon.withOpacity(0.8)),
               ...apps.map((app) => ListTile(
                     title: Text(app,
                         style: const TextStyle(color: Colors.white)),
                     trailing: _selectedNavApp == app
-                        ? const Icon(Icons.check, color: Colors.cyanAccent)
+                        ? Icon(Icons.check, color: _neon)
                         : null,
                     onTap: () {
                       setState(() => _selectedNavApp = app);
@@ -204,14 +249,14 @@ class _DashboardScreenState extends State<DashboardScreen>
       body: SafeArea(
         child: Row(
           children: [
-            // ۱. سایدبار داک سمت چپ (ضد کشیدگی با AspectRatio قفل‌شده)
+            // ۱. سایدبار داک سمت چپ
             Container(
               width: dockWidth,
               decoration: BoxDecoration(
                 color: const Color(0xFF0B111E).withOpacity(0.95),
                 border: Border(
                   right: BorderSide(
-                    color: Colors.cyanAccent.withOpacity(0.3),
+                    color: _neon.withOpacity(0.3),
                     width: 1.5,
                   ),
                 ),
@@ -222,56 +267,77 @@ class _DashboardScreenState extends State<DashboardScreen>
                   _buildDockIconButton(
                     icon: Icons.settings_rounded,
                     tooltip: 'تنظیمات',
-                    onTap: () => _invokeNative('openSettings'),
+                    onTap: () => _openAction(
+                      'settings',
+                      legacyMethod: 'openSettings',
+                    ),
                   ),
                   _buildDockIconButton(
                     icon: Icons.navigation_rounded,
                     tooltip: 'مسیریاب',
-                    onTap: () => _invokeNative('openNav', {'app': _selectedNavApp}),
+                    onTap: () => _openAction(
+                      'nav',
+                      extras: {'app': _selectedNavApp},
+                      legacyMethod: 'openNav',
+                    ),
                   ),
                   _buildDockIconButton(
                     icon: Icons.radio_rounded,
                     tooltip: 'رادیو',
-                    onTap: () => _invokeNative('openRadio'),
+                    onTap: () => _openAction(
+                      'radio',
+                      legacyMethod: 'openRadio',
+                    ),
                   ),
                   _buildDockIconButton(
                     icon: Icons.phone_in_talk_rounded,
                     tooltip: 'تماس',
-                    onTap: () => _invokeNative('openPhone'),
+                    onTap: () => _openAction(
+                      'phone',
+                      legacyMethod: 'openPhone',
+                    ),
                   ),
                   _buildDockIconButton(
                     icon: Icons.apps_rounded,
                     tooltip: 'برنامه‌ها',
-                    onTap: () => _invokeNative('openApps'),
+                    onTap: () => _openAction(
+                      'apps',
+                      legacyMethod: 'openApps',
+                    ),
                   ),
                 ],
               ),
             ),
 
-            // ۲. صفحه اصلی (داشبورد ۳ ستونه)
+            // ۲. صفحه اصلی
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                child: Row(
+                child: Stack(
                   children: [
-                    // کارت ناوبری و ساعت سمت چپ
-                    Expanded(
-                      flex: 3,
-                      child: _buildLeftCard(),
+                    Row(
+                      children: [
+                        Expanded(flex: 3, child: _buildLeftCard()),
+                        const SizedBox(width: 10),
+                        Expanded(flex: 4, child: _buildCenterGaugeRoad()),
+                        const SizedBox(width: 10),
+                        Expanded(flex: 3, child: _buildRightCard()),
+                      ],
                     ),
-                    const SizedBox(width: 10),
 
-                    // ستون مرکزی: کیلومترشمار نیم‌دایره نئونی + جاده ۳ بعدی + نمای پشت تیبا
-                    Expanded(
-                      flex: 4,
-                      child: _buildCenterGaugeRoad(),
-                    ),
-                    const SizedBox(width: 10),
-
-                    // کارت موزیک و تصویر خودرو تیبا ۲ سمت راست
-                    Expanded(
-                      flex: 3,
-                      child: _buildRightCard(),
+                    // --- عنوان نئونی بالا (روی کل صفحه)
+                    Positioned(
+                      top: 2,
+                      left: 0,
+                      right: 0,
+                      child: IgnorePointer(
+                        child: _NeonTitle(
+                          title: 'TIBA2',
+                          subtitle: 'تیبا ۲',
+                          neon: _neon,
+                          neon2: _neon2,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -283,7 +349,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  // ویجت دکمه‌های داک با نسبت ابعاد دقیق ۱:۱
   Widget _buildDockIconButton({
     required IconData icon,
     required String tooltip,
@@ -302,24 +367,20 @@ class _DashboardScreenState extends State<DashboardScreen>
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: Colors.cyanAccent.withOpacity(0.2),
+                  color: _neon.withOpacity(0.2),
                   width: 1.2,
                 ),
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    Colors.cyanAccent.withOpacity(0.15),
+                    _neon.withOpacity(0.15),
                     Colors.transparent,
                   ],
                 ),
               ),
               child: Center(
-                child: Icon(
-                  icon,
-                  color: Colors.cyanAccent,
-                  size: 26,
-                ),
+                child: Icon(icon, color: _neon, size: 26),
               ),
             ),
           ),
@@ -328,15 +389,12 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  // پنل سمت چپ
   Widget _buildLeftCard() {
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF0F172A).withOpacity(0.8),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.cyanAccent.withOpacity(0.25),
-        ),
+        border: Border.all(color: _neon.withOpacity(0.25)),
       ),
       child: Column(
         children: [
@@ -348,17 +406,18 @@ class _DashboardScreenState extends State<DashboardScreen>
                 GestureDetector(
                   onTap: _showNavAppSelector,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.cyanAccent.withOpacity(0.4)),
+                      border: Border.all(color: _neon.withOpacity(0.4)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.arrow_drop_down, color: Colors.cyanAccent, size: 16),
+                        Icon(Icons.arrow_drop_down, color: _neon, size: 16),
                         Text(_selectedNavApp,
-                            style: const TextStyle(color: Colors.cyanAccent, fontSize: 11)),
+                            style: TextStyle(color: _neon, fontSize: 11)),
                       ],
                     ),
                   ),
@@ -385,7 +444,11 @@ class _DashboardScreenState extends State<DashboardScreen>
           ),
           Expanded(
             child: GestureDetector(
-              onTap: () => _invokeNative('openNav', {'app': _selectedNavApp}),
+              onTap: () => _openAction(
+                'nav',
+                extras: {'app': _selectedNavApp},
+                legacyMethod: 'openNav',
+              ),
               child: Container(
                 margin: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
@@ -393,14 +456,15 @@ class _DashboardScreenState extends State<DashboardScreen>
                   color: Colors.black45,
                   border: Border.all(color: Colors.white10),
                 ),
-                child: const Center(
+                child: Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.map_outlined, color: Colors.cyanAccent, size: 48),
-                      SizedBox(height: 8),
-                      Text('لمس جهت باز شدن نقشه',
-                          style: TextStyle(color: Colors.white70, fontSize: 12)),
+                      Icon(Icons.map_outlined, color: _neon, size: 48),
+                      const SizedBox(height: 8),
+                      const Text('لمس جهت باز شدن نقشه',
+                          style:
+                              TextStyle(color: Colors.white70, fontSize: 12)),
                     ],
                   ),
                 ),
@@ -412,155 +476,174 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  // پنل مرکزی: کیلومتر نیم‌دایره نئونی واقعی (۱۰ تا ۱۳۰) + هاله نوری + جاده ۳ بعدی
   Widget _buildCenterGaugeRoad() {
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF0B101D).withOpacity(0.9),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.cyanAccent.withOpacity(0.3)),
+        border: Border.all(color: _neon.withOpacity(0.3)),
       ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // لایه ۱: جاده پرسپکتیو ۳ بعدی در نیمه پایین
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: 150,
-            child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
-              child: AnimatedBuilder(
-                animation: _roadAnimController,
-                builder: (context, child) {
-                  return CustomPaint(
-                    painter: RealisticCyberRoadPainter(
-                      progress: _roadAnimController.value,
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final h = constraints.maxHeight;
+          // Road height is 150 in your code; keep it.
+          const roadHeight = 150.0;
 
-          // لایه ۲: نمای پشت تیبا ۲ مستقر در مرکز جاده
-          Positioned(
-            bottom: 22,
-            child: Image.asset(
-              'tiba2_rear.png',
-              height: 72,
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) {
-                return const Icon(Icons.directions_car,
-                    color: Colors.cyanAccent, size: 60);
-              },
-            ),
-          ),
+          // Place speedometer so its center sits near the road centerline area.
+          // If you want it even lower/higher: tweak this offset only.
+          const fineTune = 10.0;
 
-          // لایه ۳: نشان سایپا با افکت نئونی زیر سرعت‌سنج
-          Positioned(
-            top: 138,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.cyanAccent.withOpacity(0.4)),
-              ),
-              child: const Text(
-                'SAIPA',
-                style: TextStyle(
-                  color: Colors.cyanAccent,
-                  fontSize: 10,
-                  letterSpacing: 3,
-                  fontWeight: FontWeight.w900,
+          final speedoHeight = 140.0;
+          final speedoTop =
+              (h - roadHeight) - (speedoHeight * 0.55) + fineTune;
+
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              // Road (bottom)
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: roadHeight,
+                child: ClipRRect(
+                  borderRadius:
+                      const BorderRadius.vertical(bottom: Radius.circular(20)),
+                  child: AnimatedBuilder(
+                    animation: _roadAnimController,
+                    builder: (context, child) {
+                      return CustomPaint(
+                        painter: RealisticCyberRoadPainter(
+                          progress: _roadAnimController.value,
+                          neon: _neon,
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
-            ),
-          ),
 
-          // لایه ۴: سرعت‌سنج نیم‌دایره نئونی (۱۰ تا ۱۳۰) با هاله نوری درخشان
-          Positioned(
-            top: 10,
-            left: 0,
-            right: 0,
-            child: SizedBox(
-              height: 140,
-              child: CustomPaint(
-                painter: SemiCircleSpeedometerPainter(speed: _speed),
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 28),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // عدد سرعت با Glow نئونی عمیق
-                        Text(
-                          _speed.toInt().toString(),
-                          style: TextStyle(
-                            fontSize: 48,
-                            fontWeight: FontWeight.w900,
-                            fontFamily: 'monospace',
-                            color: Colors.white,
-                            shadows: [
-                              Shadow(
-                                color: Colors.cyanAccent.withOpacity(0.9),
-                                blurRadius: 18,
-                              ),
-                              Shadow(
-                                color: Colors.cyanAccent.withOpacity(0.6),
-                                blurRadius: 36,
-                              ),
-                              const Shadow(
-                                color: Colors.blueAccent,
-                                blurRadius: 50,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Text(
-                          'KM/H',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 2,
-                            color: Colors.cyanAccent,
-                          ),
-                        ),
-                      ],
+              // Rear car on road
+              Positioned(
+                bottom: 22,
+                child: Image.asset(
+                  'tiba2_rear.png',
+                  height: 72,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Icon(Icons.directions_car, color: _neon, size: 60);
+                  },
+                ),
+              ),
+
+              // SAIPA under speedometer
+              Positioned(
+                top: speedoTop + speedoHeight - 18,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: _neon.withOpacity(0.4)),
+                  ),
+                  child: Text(
+                    'SAIPA',
+                    style: TextStyle(
+                      color: _neon,
+                      fontSize: 10,
+                      letterSpacing: 3,
+                      fontWeight: FontWeight.w900,
                     ),
                   ),
                 ),
               ),
-            ),
-          ),
 
-          // دکمه کالیبراسیون و وضعیت GPS در گوشه بالا
-          Positioned(
-            top: 8,
-            left: 8,
-            child: IconButton(
-              icon: const Icon(Icons.satellite_alt_rounded,
-                  color: Colors.cyanAccent, size: 20),
-              onPressed: _showCalibrationDialog,
-            ),
-          ),
+              // Speedometer (moved DOWN to sit on road markings)
+              Positioned(
+                top: speedoTop,
+                left: 0,
+                right: 0,
+                child: SizedBox(
+                  height: speedoHeight,
+                  child: CustomPaint(
+                    painter: SemiCircleSpeedometerPainter(
+                      speed: _speed,
+                      neon: _neon,
+                    ),
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 28),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _speed.toInt().toString(),
+                              style: TextStyle(
+                                fontSize: 48,
+                                fontWeight: FontWeight.w900,
+                                fontFamily: 'monospace',
+                                color: Colors.white,
+                                shadows: [
+                                  Shadow(
+                                    color: _neon.withOpacity(0.9),
+                                    blurRadius: 18,
+                                  ),
+                                  Shadow(
+                                    color: _neon.withOpacity(0.6),
+                                    blurRadius: 36,
+                                  ),
+                                  const Shadow(
+                                    color: Colors.blueAccent,
+                                    blurRadius: 50,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              'KM/H',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 2,
+                                color: _neon,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
 
-          // وضعیت دنده‌های خودرو P R N D نئونی
-          Positioned(
-            bottom: 4,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildGearText('P', false),
-                _buildGearText('R', false),
-                _buildGearText('N', false),
-                _buildGearText('D', true),
-              ],
-            ),
-          ),
-        ],
+              // Calibration/GPS button
+              Positioned(
+                top: 8,
+                left: 8,
+                child: IconButton(
+                  icon: Icon(Icons.satellite_alt_rounded,
+                      color: _neon, size: 20),
+                  onPressed: _showCalibrationDialog,
+                ),
+              ),
+
+              // Gears
+              Positioned(
+                bottom: 4,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildGearText('P', false),
+                    _buildGearText('R', false),
+                    _buildGearText('N', false),
+                    _buildGearText('D', true),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -571,15 +654,12 @@ class _DashboardScreenState extends State<DashboardScreen>
       child: Text(
         gear,
         style: TextStyle(
-          color: active ? Colors.cyanAccent : Colors.white24,
+          color: active ? _neon : Colors.white24,
           fontSize: 13,
           fontWeight: FontWeight.bold,
           shadows: active
-              ? const [
-                  Shadow(
-                    color: Colors.cyanAccent,
-                    blurRadius: 10,
-                  )
+              ? [
+                  Shadow(color: _neon, blurRadius: 10),
                 ]
               : null,
         ),
@@ -587,44 +667,47 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  // پنل سمت راست (موزیک + تصویر تیبا ۲)
   Widget _buildRightCard() {
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF0F172A).withOpacity(0.8),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.cyanAccent.withOpacity(0.25),
-        ),
+        border: Border.all(color: _neon.withOpacity(0.25)),
       ),
       child: Column(
         children: [
-          // کنترل موزیک پلیر
           Padding(
             padding: const EdgeInsets.all(10),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 IconButton(
-                  icon: const Icon(Icons.skip_previous_rounded,
-                      color: Colors.cyanAccent, size: 26),
-                  onPressed: () => _invokeNative('musicPrev'),
+                  icon: Icon(Icons.skip_previous_rounded,
+                      color: _neon, size: 26),
+                  onPressed: () => _openAction(
+                    'music_prev',
+                    legacyMethod: 'musicPrev',
+                  ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.play_circle_fill_rounded,
-                      color: Colors.cyanAccent, size: 36),
-                  onPressed: () => _invokeNative('musicPlayPause'),
+                  icon: Icon(Icons.play_circle_fill_rounded,
+                      color: _neon, size: 36),
+                  onPressed: () => _openAction(
+                    'music_play_pause',
+                    legacyMethod: 'musicPlayPause',
+                  ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.skip_next_rounded,
-                      color: Colors.cyanAccent, size: 26),
-                  onPressed: () => _invokeNative('musicNext'),
+                  icon: Icon(Icons.skip_next_rounded, color: _neon, size: 26),
+                  onPressed: () => _openAction(
+                    'music_next',
+                    legacyMethod: 'musicNext',
+                  ),
                 ),
               ],
             ),
           ),
           const Divider(color: Colors.white12, height: 1),
-          // تصویر اصلی تیبا ۲
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(12),
@@ -632,9 +715,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                 'tiba2.png',
                 fit: BoxFit.contain,
                 errorBuilder: (context, error, stackTrace) {
-                  return const Center(
-                    child: Icon(Icons.car_rental,
-                        color: Colors.cyanAccent, size: 50),
+                  return Center(
+                    child: Icon(Icons.car_rental, color: _neon, size: 50),
                   );
                 },
               ),
@@ -646,13 +728,64 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 }
 
+class _NeonTitle extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final Color neon;
+  final Color neon2;
+
+  const _NeonTitle({
+    required this.title,
+    required this.subtitle,
+    required this.neon,
+    required this.neon2,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 6,
+            color: Colors.white,
+            shadows: [
+              Shadow(color: neon.withOpacity(0.9), blurRadius: 18),
+              Shadow(color: neon2.withOpacity(0.6), blurRadius: 32),
+            ],
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          subtitle,
+          style: TextStyle(
+            fontSize: 11,
+            letterSpacing: 2,
+            fontWeight: FontWeight.bold,
+            color: neon,
+            shadows: [
+              Shadow(color: neon.withOpacity(0.8), blurRadius: 14),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
-// نقاش سرعت‌سنج نیم‌دایره نئونی با اعداد ۱۰ تا ۱۳۰
+// Speedometer painter
 // ---------------------------------------------------------------------------
 class SemiCircleSpeedometerPainter extends CustomPainter {
   final double speed;
+  final Color neon;
 
-  SemiCircleSpeedometerPainter({required this.speed});
+  SemiCircleSpeedometerPainter({required this.speed, required this.neon});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -662,7 +795,6 @@ class SemiCircleSpeedometerPainter extends CustomPainter {
     const startAngle = math.pi;
     const sweepAngle = math.pi;
 
-    // کمان پس‌زمینه
     final bgPaint = Paint()
       ..color = Colors.white12
       ..style = PaintingStyle.stroke
@@ -675,10 +807,9 @@ class SemiCircleSpeedometerPainter extends CustomPainter {
       bgPaint,
     );
 
-    // کمان پیشرفت سرعت به رنگ نئون
     final progress = (speed / 130.0).clamp(0.0, 1.0);
     final activePaint = Paint()
-      ..color = Colors.cyanAccent
+      ..color = neon
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
       ..strokeWidth = 4.0
@@ -692,7 +823,6 @@ class SemiCircleSpeedometerPainter extends CustomPainter {
       activePaint,
     );
 
-    // تیک‌ها و اعداد ۱۰ تا ۱۳۰ دور کیلومتر
     const totalDivisions = 13;
     for (int i = 0; i <= totalDivisions; i++) {
       final angle = startAngle + (sweepAngle * (i / totalDivisions));
@@ -709,14 +839,11 @@ class SemiCircleSpeedometerPainter extends CustomPainter {
       );
 
       final tickPaint = Paint()
-        ..color = (i / totalDivisions <= progress)
-            ? Colors.cyanAccent
-            : Colors.white38
+        ..color = (i / totalDivisions <= progress) ? neon : Colors.white38
         ..strokeWidth = isMajor ? 2.0 : 1.0;
 
       canvas.drawLine(p1, p2, tickPaint);
 
-      // رسم اعداد ۱۰، ۲۰، ۳۰ ... ۱۳۰
       if (i > 0) {
         final textRadius = radius - 18;
         final textOffset = Offset(
@@ -727,9 +854,7 @@ class SemiCircleSpeedometerPainter extends CustomPainter {
         final textSpan = TextSpan(
           text: '${i * 10}',
           style: TextStyle(
-            color: (i / totalDivisions <= progress)
-                ? Colors.cyanAccent
-                : Colors.white54,
+            color: (i / totalDivisions <= progress) ? neon : Colors.white54,
             fontSize: 9,
             fontWeight: FontWeight.bold,
             fontFamily: 'monospace',
@@ -743,7 +868,8 @@ class SemiCircleSpeedometerPainter extends CustomPainter {
 
         tp.paint(
           canvas,
-          Offset(textOffset.dx - (tp.width / 2), textOffset.dy - (tp.height / 2)),
+          Offset(textOffset.dx - (tp.width / 2),
+              textOffset.dy - (tp.height / 2)),
         );
       }
     }
@@ -751,17 +877,18 @@ class SemiCircleSpeedometerPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant SemiCircleSpeedometerPainter oldDelegate) {
-    return oldDelegate.speed != speed;
+    return oldDelegate.speed != speed || oldDelegate.neon != neon;
   }
 }
 
 // ---------------------------------------------------------------------------
-// نقاش جاده نئونی طبیعی با پرسپکتیو ۳ بعدی
+// Road painter
 // ---------------------------------------------------------------------------
 class RealisticCyberRoadPainter extends CustomPainter {
   final double progress;
+  final Color neon;
 
-  RealisticCyberRoadPainter({required this.progress});
+  RealisticCyberRoadPainter({required this.progress, required this.neon});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -772,7 +899,6 @@ class RealisticCyberRoadPainter extends CustomPainter {
     final topRoadW = w * 0.18;
     final bottomRoadW = w * 0.95;
 
-    // سطح آسفالت گرادیانی
     final roadPath = Path()
       ..moveTo(w / 2 - topRoadW / 2, horizonY)
       ..lineTo(w / 2 + topRoadW / 2, horizonY)
@@ -796,9 +922,8 @@ class RealisticCyberRoadPainter extends CustomPainter {
         ..style = PaintingStyle.fill,
     );
 
-    // خطوط مرزی کناری
     final borderPaint = Paint()
-      ..color = Colors.cyanAccent.withOpacity(0.6)
+      ..color = neon.withOpacity(0.6)
       ..strokeWidth = 2.5
       ..maskFilter = const MaskFilter.blur(BlurStyle.solid, 4);
 
@@ -813,7 +938,6 @@ class RealisticCyberRoadPainter extends CustomPainter {
       borderPaint,
     );
 
-    // خطوط منقطع وسط جاده
     const dashCount = 6;
     for (int i = 0; i < dashCount; i++) {
       double t = (i / dashCount + progress) % 1.0;
@@ -825,7 +949,7 @@ class RealisticCyberRoadPainter extends CustomPainter {
       double alpha = (0.2 + (0.8 * perspectiveT)).clamp(0.0, 1.0);
 
       final dashPaint = Paint()
-        ..color = Colors.cyanAccent.withOpacity(alpha)
+        ..color = neon.withOpacity(alpha)
         ..strokeWidth = dashW
         ..strokeCap = StrokeCap.round
         ..maskFilter = const MaskFilter.blur(BlurStyle.solid, 2);
@@ -840,6 +964,6 @@ class RealisticCyberRoadPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant RealisticCyberRoadPainter oldDelegate) {
-    return oldDelegate.progress != progress;
+    return oldDelegate.progress != progress || oldDelegate.neon != neon;
   }
 }
