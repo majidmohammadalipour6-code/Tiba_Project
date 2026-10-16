@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:ui' show FontFeature;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -26,16 +28,13 @@ class TibaLauncherApp extends StatelessWidget {
   }
 }
 
-// ------------------------------------------------------------
-// پنج تم از پیش تعریف‌شده
-// ------------------------------------------------------------
-
 class LauncherTheme {
   final String id;
   final String name;
   final String subtitle;
   final IconData icon;
   final Color accent;
+  final Color secondary;
   final Color background;
   final Color background2;
   final Color panel;
@@ -51,6 +50,7 @@ class LauncherTheme {
     required this.subtitle,
     required this.icon,
     required this.accent,
+    required this.secondary,
     required this.background,
     required this.background2,
     required this.panel,
@@ -68,10 +68,11 @@ const List<LauncherTheme> launcherThemes = [
     name: 'سایبر نئونی',
     subtitle: 'CYBER NEON',
     icon: Icons.electric_bolt,
-    accent: Color(0xFF00E5FF),
-    background: Color(0xFF061321),
-    background2: Color(0xFF02050D),
-    panel: Color(0xFF091725),
+    accent: Color(0xFF64F3FF),
+    secondary: Color(0xFF00B8D9),
+    background: Color(0xFF082C48),
+    background2: Color(0xFF010610),
+    panel: Color(0xFF071B2B),
     radius: 20,
   ),
   LauncherTheme(
@@ -79,10 +80,11 @@ const List<LauncherTheme> launcherThemes = [
     name: 'اسپرت مسابقه‌ای',
     subtitle: 'RACING SPORT',
     icon: Icons.speed,
-    accent: Color(0xFFFF304F),
-    background: Color(0xFF20080D),
-    background2: Color(0xFF070608),
-    panel: Color(0xFF180D12),
+    accent: Color(0xFFFF1744),
+    secondary: Color(0xFFA90052),
+    background: Color(0xFF480719),
+    background2: Color(0xFF090207),
+    panel: Color(0xFF210610),
     radius: 5,
     racing: true,
   ),
@@ -91,10 +93,11 @@ const List<LauncherTheme> launcherThemes = [
     name: 'لوکس و مینیمال',
     subtitle: 'LUXURY MINIMAL',
     icon: Icons.diamond_outlined,
-    accent: Color(0xFFD6B779),
-    background: Color(0xFF171613),
-    background2: Color(0xFF070707),
-    panel: Color(0xFF131210),
+    accent: Color(0xFFE8D5A3),
+    secondary: Color(0xFF987548),
+    background: Color(0xFF383020),
+    background2: Color(0xFF0C0B09),
+    panel: Color(0xFF1D1A14),
     radius: 13,
     minimal: true,
   ),
@@ -103,10 +106,11 @@ const List<LauncherTheme> launcherThemes = [
     name: 'هولوگرافیک فضایی',
     subtitle: 'HOLOGRAPHIC SPACE',
     icon: Icons.blur_on,
-    accent: Color(0xFFB388FF),
-    background: Color(0xFF170C32),
-    background2: Color(0xFF030511),
-    panel: Color(0xFF140E29),
+    accent: Color(0xFFC77DFF),
+    secondary: Color(0xFF6A00F4),
+    background: Color(0xFF30105B),
+    background2: Color(0xFF050313),
+    panel: Color(0xFF190B31),
     radius: 23,
     holographic: true,
   ),
@@ -115,10 +119,11 @@ const List<LauncherTheme> launcherThemes = [
     name: 'کلاسیک خودرو',
     subtitle: 'CLASSIC AUTOMOTIVE',
     icon: Icons.directions_car_filled,
-    accent: Color(0xFFFFBF55),
-    background: Color(0xFF20180D),
-    background2: Color(0xFF080906),
-    panel: Color(0xFF17150F),
+    accent: Color(0xFFFFB86B),
+    secondary: Color(0xFFB76532),
+    background: Color(0xFF422514),
+    background2: Color(0xFF100905),
+    panel: Color(0xFF24160D),
     radius: 9,
     classic: true,
   ),
@@ -141,24 +146,24 @@ class _LauncherHomeState extends State<LauncherHome>
   double _roadIntensity = 1;
   double _speedometerIntensity = 1;
 
-  Color _neonColor = const Color(0xFF00E5FF);
+  Color _neonColor = const Color(0xFF64F3FF);
   String _selectedTheme = 'cyber';
 
-  LauncherTheme get _theme {
-    return launcherThemes.firstWhere(
-      (t) => t.id == _selectedTheme,
-      orElse: () => launcherThemes.first,
-    );
-  }
+  LauncherTheme get _theme => launcherThemes.firstWhere(
+        (t) => t.id == _selectedTheme,
+        orElse: () => launcherThemes.first,
+      );
 
   static const List<MapEntry<String, Color>> _neonColors = [
-    MapEntry('فیروزه‌ای', Color(0xFF00E5FF)),
-    MapEntry('بنفش', Color(0xFFB388FF)),
-    MapEntry('قرمز', Color(0xFFFF3B5C)),
-    MapEntry('سبز', Color(0xFF39FF88)),
-    MapEntry('نارنجی', Color(0xFFFF9F1C)),
-    MapEntry('سفید یخی', Color(0xFFEAF7FF)),
+    MapEntry('آبی کریستالی', Color(0xFF64F3FF)),
+    MapEntry('فیروزه‌ای', Color(0xFF00B8D9)),
+    MapEntry('بنفش', Color(0xFFC77DFF)),
+    MapEntry('قرمز لیزری', Color(0xFFFF1744)),
+    MapEntry('سبز نئونی', Color(0xFF39FF88)),
+    MapEntry('طلایی', Color(0xFFE8D5A3)),
+    MapEntry('مسی', Color(0xFFFFB86B)),
     MapEntry('صورتی', Color(0xFFFF4FD8)),
+    MapEntry('سفید یخی', Color(0xFFEAF7FF)),
   ];
 
   String _timeString = '';
@@ -193,9 +198,9 @@ class _LauncherHomeState extends State<LauncherHome>
   void _setupPlatformChannel() {
     platform.setMethodCallHandler((call) async {
       if (call.method == 'onSpeed') {
-        final speed = (call.arguments as num).toDouble();
-        if (mounted) {
-          setState(() => _rawSpeed = speed < 1 ? 0 : speed);
+        final value = call.arguments;
+        if (value is num && mounted) {
+          setState(() => _rawSpeed = value.toDouble() < 1 ? 0 : value.toDouble());
         }
       }
     });
@@ -211,18 +216,13 @@ class _LauncherHomeState extends State<LauncherHome>
       _roadIntensity = prefs.getDouble('road_intensity') ?? 1;
       _speedometerIntensity =
           prefs.getDouble('speedometer_intensity') ?? 1;
-
-      _selectedNav =
-          prefs.getString('selected_nav') ?? 'ir.neshan.sp';
-
+      _selectedNav = prefs.getString('selected_nav') ?? 'ir.neshan.sp';
       _selectedTheme = prefs.getString('launcher_theme') ?? 'cyber';
 
-      final colorVal = prefs.getInt('neon_color');
-      if (colorVal != null) {
-        _neonColor = Color(colorVal);
-      } else {
-        _neonColor = _theme.accent;
-      }
+      final savedColor = prefs.getInt('neon_color');
+      _neonColor = savedColor == null
+          ? _theme.accent
+          : Color(savedColor);
     });
   }
 
@@ -233,7 +233,9 @@ class _LauncherHomeState extends State<LauncherHome>
     await prefs.setDouble('neon_intensity', _neonIntensity);
     await prefs.setDouble('road_intensity', _roadIntensity);
     await prefs.setDouble(
-        'speedometer_intensity', _speedometerIntensity);
+      'speedometer_intensity',
+      _speedometerIntensity,
+    );
     await prefs.setString('selected_nav', _selectedNav);
     await prefs.setInt('neon_color', _neonColor.value);
     await prefs.setString('launcher_theme', _selectedTheme);
@@ -260,15 +262,13 @@ class _LauncherHomeState extends State<LauncherHome>
   }
 
   void _updateClock() {
-    final now = DateTime.now();
-
     if (!mounted) return;
 
+    final now = DateTime.now();
     setState(() {
       _timeString =
           '${now.hour.toString().padLeft(2, '0')}:'
           '${now.minute.toString().padLeft(2, '0')}';
-
       _dateString = '${now.year}/${now.month}/${now.day}';
     });
   }
@@ -284,13 +284,13 @@ class _LauncherHomeState extends State<LauncherHome>
   }
 
   Future<void> _requestAllPermissions() async {
-    await [
-      Permission.location,
-      Permission.storage,
-      Permission.audio,
-    ].request();
-
     try {
+      await [
+        Permission.location,
+        Permission.storage,
+        Permission.audio,
+      ].request();
+
       await platform.invokeMethod(
         'open',
         {'action': 'request_location'},
@@ -315,7 +315,6 @@ class _LauncherHomeState extends State<LauncherHome>
     if (result == null || !mounted) return;
 
     final selected = result.files.where((f) => f.path != null).toList();
-
     if (selected.isEmpty) return;
 
     setState(() {
@@ -333,7 +332,6 @@ class _LauncherHomeState extends State<LauncherHome>
     if (file.path == null) return;
 
     await _player.play(DeviceFileSource(file.path!));
-
     if (!mounted) return;
 
     setState(() {
@@ -345,12 +343,7 @@ class _LauncherHomeState extends State<LauncherHome>
 
   Future<void> _togglePlayPause() async {
     if (_tracks.isEmpty) {
-      try {
-        await platform.invokeMethod(
-          'open',
-          {'action': 'media_play_pause'},
-        );
-      } catch (_) {}
+      await _launchIntent('media_play_pause');
       return;
     }
 
@@ -365,16 +358,9 @@ class _LauncherHomeState extends State<LauncherHome>
 
   Future<void> _nextTrack() async {
     if (_tracks.isNotEmpty) {
-      await _playTrack(
-        (_currentTrackIndex + 1) % _tracks.length,
-      );
+      await _playTrack((_currentTrackIndex + 1) % _tracks.length);
     } else {
-      try {
-        await platform.invokeMethod(
-          'open',
-          {'action': 'media_next'},
-        );
-      } catch (_) {}
+      await _launchIntent('media_next');
     }
   }
 
@@ -384,12 +370,7 @@ class _LauncherHomeState extends State<LauncherHome>
         (_currentTrackIndex - 1 + _tracks.length) % _tracks.length,
       );
     } else {
-      try {
-        await platform.invokeMethod(
-          'open',
-          {'action': 'media_prev'},
-        );
-      } catch (_) {}
+      await _launchIntent('media_prev');
     }
   }
 
@@ -402,31 +383,31 @@ class _LauncherHomeState extends State<LauncherHome>
     } catch (_) {}
   }
 
-  // ------------------------------------------------------------
-  // ظاهر مشترک پنل‌ها
-  // ------------------------------------------------------------
-
   BoxDecoration _panelDecoration({
     double opacity = 0.88,
     bool highlighted = false,
   }) {
-    final glow = _theme.minimal ? 0.04 : 0.16;
+    final glow = _theme.minimal ? 0.04 : 0.20;
 
     return BoxDecoration(
       color: _theme.panel.withOpacity(opacity),
       borderRadius: BorderRadius.circular(_theme.radius),
       border: Border.all(
         color: _neonColor.withOpacity(
-          (highlighted ? 0.85 : 0.30) * _neonIntensity,
+          ((highlighted ? 0.9 : 0.4) * _neonIntensity)
+              .clamp(0.0, 1.0)
+              .toDouble(),
         ),
-        width: _theme.racing ? 1.7 : 1,
+        width: _theme.racing ? 1.8 : 1,
       ),
       boxShadow: [
         if (!_theme.minimal)
           BoxShadow(
-            color: _neonColor.withOpacity(glow * _neonIntensity),
-            blurRadius: _theme.holographic ? 22 : 12,
-            spreadRadius: _theme.holographic ? 1 : 0,
+            color: _neonColor.withOpacity(
+              (glow * _neonIntensity).clamp(0.0, 0.8).toDouble(),
+            ),
+            blurRadius: _theme.holographic ? 25 : 15,
+            spreadRadius: _theme.holographic ? 2 : 0,
           ),
       ],
     );
@@ -443,10 +424,6 @@ class _LauncherHomeState extends State<LauncherHome>
     );
   }
 
-  // ------------------------------------------------------------
-  // انتخاب تم
-  // ------------------------------------------------------------
-
   void _openThemePicker() {
     showDialog(
       context: context,
@@ -457,7 +434,7 @@ class _LauncherHomeState extends State<LauncherHome>
               backgroundColor: _theme.panel,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(_theme.radius),
-                side: BorderSide(color: _neonColor, width: 1.4),
+                side: BorderSide(color: _neonColor, width: 1.5),
               ),
               title: Text(
                 'انتخاب تم لانچر',
@@ -476,28 +453,28 @@ class _LauncherHomeState extends State<LauncherHome>
                       final selected = _selectedTheme == theme.id;
 
                       return InkWell(
-                        borderRadius:
-                            BorderRadius.circular(theme.radius),
+                        borderRadius: BorderRadius.circular(theme.radius),
                         onTap: () async {
                           await _selectTheme(theme.id);
-
                           if (dialogContext.mounted) {
                             setDialogState(() {});
                           }
                         },
                         child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 220),
+                          duration: const Duration(milliseconds: 280),
                           margin: const EdgeInsets.only(bottom: 10),
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
                               colors: [
                                 theme.background,
                                 theme.background2,
+                                theme.panel,
                               ],
                             ),
-                            borderRadius:
-                                BorderRadius.circular(theme.radius),
+                            borderRadius: BorderRadius.circular(theme.radius),
                             border: Border.all(
                               color: selected
                                   ? theme.accent
@@ -507,8 +484,8 @@ class _LauncherHomeState extends State<LauncherHome>
                             boxShadow: selected
                                 ? [
                                     BoxShadow(
-                                      color: theme.accent.withOpacity(0.22),
-                                      blurRadius: 14,
+                                      color: theme.accent.withOpacity(0.3),
+                                      blurRadius: 18,
                                     ),
                                   ]
                                 : [],
@@ -519,12 +496,17 @@ class _LauncherHomeState extends State<LauncherHome>
                                 width: 48,
                                 height: 48,
                                 decoration: BoxDecoration(
-                                  color: theme.accent.withOpacity(0.13),
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      theme.accent.withOpacity(0.3),
+                                      theme.secondary.withOpacity(0.08),
+                                    ],
+                                  ),
                                   borderRadius: BorderRadius.circular(
                                     theme.radius * 0.7,
                                   ),
                                   border: Border.all(
-                                    color: theme.accent.withOpacity(0.8),
+                                    color: theme.accent,
                                   ),
                                 ),
                                 child: Icon(
@@ -536,12 +518,11 @@ class _LauncherHomeState extends State<LauncherHome>
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       theme.name,
-                                      style: TextStyle(
+                                      style: const TextStyle(
                                         color: Colors.white,
                                         fontWeight: FontWeight.bold,
                                         fontSize: 15,
@@ -576,10 +557,7 @@ class _LauncherHomeState extends State<LauncherHome>
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(dialogContext),
-                  child: Text(
-                    'بستن',
-                    style: TextStyle(color: _neonColor),
-                  ),
+                  child: Text('بستن', style: TextStyle(color: _neonColor)),
                 ),
               ],
             );
@@ -588,10 +566,6 @@ class _LauncherHomeState extends State<LauncherHome>
       },
     );
   }
-
-  // ------------------------------------------------------------
-  // تنظیمات اصلی
-  // ------------------------------------------------------------
 
   void _openSettingsDialog() {
     showDialog(
@@ -638,8 +612,7 @@ class _LauncherHomeState extends State<LauncherHome>
                   },
                 ),
                 ListTile(
-                  leading: Icon(Icons.dashboard_customize,
-                      color: _neonColor),
+                  leading: Icon(Icons.dashboard_customize, color: _neonColor),
                   title: const Text(
                     'انتخاب تم ظاهری',
                     style: TextStyle(color: Colors.white),
@@ -651,8 +624,7 @@ class _LauncherHomeState extends State<LauncherHome>
                 ),
                 const Divider(color: Colors.white24),
                 Text(
-                  'کالیبراسیون ضریب سرعت: '
-                  '${_gpsMultiplier.toStringAsFixed(2)}',
+                  'کالیبراسیون ضریب سرعت: ${_gpsMultiplier.toStringAsFixed(2)}',
                   style: const TextStyle(color: Colors.white70),
                 ),
                 Slider(
@@ -711,10 +683,6 @@ class _LauncherHomeState extends State<LauncherHome>
       ),
     );
   }
-
-  // ------------------------------------------------------------
-  // تنظیم نور و رنگ
-  // ------------------------------------------------------------
 
   void _openNeonSettings() {
     showDialog(
@@ -800,8 +768,7 @@ class _LauncherHomeState extends State<LauncherHome>
                       spacing: 12,
                       runSpacing: 12,
                       children: _neonColors.map((entry) {
-                        final selected =
-                            _neonColor.value == entry.value.value;
+                        final selected = _neonColor.value == entry.value.value;
 
                         return Tooltip(
                           message: entry.key,
@@ -825,9 +792,7 @@ class _LauncherHomeState extends State<LauncherHome>
                                     ),
                                 ],
                                 border: Border.all(
-                                  color: selected
-                                      ? Colors.white
-                                      : Colors.white30,
+                                  color: selected ? Colors.white : Colors.white30,
                                   width: selected ? 3 : 1,
                                 ),
                               ),
@@ -850,27 +815,22 @@ class _LauncherHomeState extends State<LauncherHome>
                       value: _neonIntensity,
                       min: 0.3,
                       max: 1.5,
-                      onChanged: (v) => updateSetting(
-                        () => _neonIntensity = v,
-                      ),
+                      onChanged: (v) => updateSetting(() => _neonIntensity = v),
                     ),
                     intensityControl(
                       title: 'شدت نور جاده متحرک',
                       value: _roadIntensity,
                       min: 0.1,
                       max: 1.5,
-                      onChanged: (v) => updateSetting(
-                        () => _roadIntensity = v,
-                      ),
+                      onChanged: (v) => updateSetting(() => _roadIntensity = v),
                     ),
                     intensityControl(
                       title: 'شدت نور سرعت‌سنج',
                       value: _speedometerIntensity,
                       min: 0.1,
                       max: 1.5,
-                      onChanged: (v) => updateSetting(
-                        () => _speedometerIntensity = v,
-                      ),
+                      onChanged: (v) =>
+                          updateSetting(() => _speedometerIntensity = v),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -897,10 +857,6 @@ class _LauncherHomeState extends State<LauncherHome>
     );
   }
 
-  // ------------------------------------------------------------
-  // صفحه اصلی
-  // ------------------------------------------------------------
-
   @override
   Widget build(BuildContext context) {
     final speed = (_rawSpeed * _gpsMultiplier).round();
@@ -908,55 +864,104 @@ class _LauncherHomeState extends State<LauncherHome>
     return Scaffold(
       backgroundColor: _theme.background2,
       body: AnimatedContainer(
-        duration: const Duration(milliseconds: 350),
+        duration: const Duration(milliseconds: 500),
         decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: _theme.racing
-                ? const Alignment(0, -0.8)
-                : const Alignment(0, -0.2),
-            radius: _theme.holographic ? 1.45 : 1.2,
+          gradient: LinearGradient(
+            begin: _theme.racing ? Alignment.topCenter : Alignment.topLeft,
+            end: Alignment.bottomRight,
             colors: [
               _theme.background,
               _theme.background2,
+              _theme.secondary.withOpacity(
+                _theme.holographic ? 0.18 : 0.08,
+              ),
+              _theme.background2,
             ],
+            stops: const [0, 0.38, 0.72, 1],
           ),
         ),
-        child: SafeArea(
-          child: Row(
-            children: [
-              _buildSidebar(),
-              Expanded(
-                flex: 4,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 12,
-                    horizontal: 8,
+        child: Stack(
+          children: [
+            Positioned(
+              top: -150,
+              left: -120,
+              child: IgnorePointer(
+                child: Container(
+                  width: 420,
+                  height: 420,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        _theme.accent.withOpacity(
+                          _theme.minimal ? 0.06 : 0.15,
+                        ),
+                        Colors.transparent,
+                      ],
+                    ),
                   ),
-                  child: _buildNavCard(),
                 ),
               ),
-              Expanded(
-                flex: 6,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 12,
-                    horizontal: 8,
+            ),
+            Positioned(
+              bottom: -180,
+              right: -130,
+              child: IgnorePointer(
+                child: Container(
+                  width: 480,
+                  height: 480,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        _theme.secondary.withOpacity(
+                          _theme.minimal ? 0.04 : 0.16,
+                        ),
+                        Colors.transparent,
+                      ],
+                    ),
                   ),
-                  child: _buildCenterDashboard(speed),
                 ),
               ),
-              Expanded(
-                flex: 4,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 12,
-                    horizontal: 8,
+            ),
+            SafeArea(
+              child: Row(
+                children: [
+                  _buildSidebar(),
+                  Expanded(
+                    flex: 4,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 8,
+                      ),
+                      child: _buildNavCard(),
+                    ),
                   ),
-                  child: _buildRightCarPanel(),
-                ),
+                  Expanded(
+                    flex: 6,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 8,
+                      ),
+                      child: _buildCenterDashboard(speed),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 4,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 8,
+                      ),
+                      child: _buildRightCarPanel(),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -970,41 +975,17 @@ class _LauncherHomeState extends State<LauncherHome>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _sideButton(
-            Icons.settings,
-            'تنظیمات اصلی',
-            _openSettingsDialog,
-          ),
-          _sideButton(
-            Icons.dashboard_customize,
-            'انتخاب تم',
-            _openThemePicker,
-          ),
-          _sideButton(
-            Icons.palette_outlined,
-            'تنظیم رنگ و نور',
-            _openNeonSettings,
-          ),
+          _sideButton(Icons.settings, 'تنظیمات اصلی', _openSettingsDialog),
+          _sideButton(Icons.dashboard_customize, 'انتخاب تم', _openThemePicker),
+          _sideButton(Icons.palette_outlined, 'تنظیم رنگ و نور', _openNeonSettings),
           _sideButton(
             Icons.navigation_outlined,
             'مسیریاب',
             () => _launchIntent('nav', pkg: _selectedNav),
           ),
-          _sideButton(
-            Icons.radio,
-            'رادیو',
-            () => _launchIntent('radio'),
-          ),
-          _sideButton(
-            Icons.phone,
-            'تلفن',
-            () => _launchIntent('phone'),
-          ),
-          _sideButton(
-            Icons.apps,
-            'برنامه‌ها',
-            () => _launchIntent('apps'),
-          ),
+          _sideButton(Icons.radio, 'رادیو', () => _launchIntent('radio')),
+          _sideButton(Icons.phone, 'تلفن', () => _launchIntent('phone')),
+          _sideButton(Icons.apps, 'برنامه‌ها', () => _launchIntent('apps')),
         ],
       ),
     );
@@ -1038,14 +1019,14 @@ class _LauncherHomeState extends State<LauncherHome>
                   color: _neonColor,
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
-                  shadows: _theme.minimal
-                      ? []
-                      : [
-                          Shadow(
-                            color: _neonColor,
-                            blurRadius: 10 * _neonIntensity,
-                          ),
-                        ],
+                  shadows: [
+                    Shadow(
+                      color: _neonColor.withOpacity(
+                        _theme.minimal ? 0.2 : _neonIntensity,
+                      ),
+                      blurRadius: _theme.minimal ? 4 : 12,
+                    ),
+                  ],
                 ),
               ),
               Flexible(
@@ -1068,16 +1049,18 @@ class _LauncherHomeState extends State<LauncherHome>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  _neonColor.withOpacity(0.14),
+                  _theme.accent.withOpacity(0.24),
+                  _theme.secondary.withOpacity(0.08),
                   Colors.transparent,
                 ],
+              ),
+              border: Border.all(
+                color: _theme.accent.withOpacity(0.35),
               ),
             ),
             child: Center(
               child: Icon(
-                _theme.classic
-                    ? Icons.explore
-                    : Icons.explore_outlined,
+                _theme.classic ? Icons.explore : Icons.explore_outlined,
                 size: 70,
                 color: _neonColor.withOpacity(0.85 * _neonIntensity),
               ),
@@ -1113,11 +1096,14 @@ class _LauncherHomeState extends State<LauncherHome>
   }) {
     return ElevatedButton.icon(
       style: ElevatedButton.styleFrom(
-        backgroundColor: _neonColor.withOpacity(
-          _theme.minimal ? 0.08 : 0.18,
+        backgroundColor: _theme.secondary.withOpacity(
+          _theme.minimal ? 0.12 : 0.28,
         ),
         foregroundColor: Colors.white,
-        side: BorderSide(color: _neonColor.withOpacity(0.9)),
+        side: BorderSide(
+          color: _neonColor.withOpacity(0.9),
+          width: _theme.racing ? 1.8 : 1,
+        ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(_theme.radius),
         ),
@@ -1127,17 +1113,10 @@ class _LauncherHomeState extends State<LauncherHome>
       icon: Icon(icon, color: _neonColor),
       label: Text(
         label,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 13,
-        ),
+        style: const TextStyle(color: Colors.white, fontSize: 13),
       ),
     );
   }
-
-  // ------------------------------------------------------------
-  // داشبورد مرکزی و سرعت‌سنج
-  // ------------------------------------------------------------
 
   Widget _buildCenterDashboard(int speed) {
     return Column(
@@ -1154,14 +1133,14 @@ class _LauncherHomeState extends State<LauncherHome>
                   fontSize: _theme.racing ? 20 : 22,
                   letterSpacing: _theme.racing ? 2.5 : 4,
                   fontWeight: FontWeight.w900,
-                  shadows: _theme.minimal
-                      ? []
-                      : [
-                          Shadow(
-                            color: _neonColor.withOpacity(_neonIntensity),
-                            blurRadius: 15 * _neonIntensity,
-                          ),
-                        ],
+                  shadows: [
+                    Shadow(
+                      color: _neonColor.withOpacity(
+                        _theme.minimal ? 0.25 : _neonIntensity,
+                      ),
+                      blurRadius: _theme.minimal ? 4 : 16,
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1189,10 +1168,11 @@ class _LauncherHomeState extends State<LauncherHome>
                       painter: RoadPainter(
                         progress: _roadAnimCtrl.value,
                         color: _neonColor.withOpacity(
-                          (0.4 * _neonIntensity * _roadIntensity)
+                          (0.65 * _neonIntensity * _roadIntensity)
                               .clamp(0.0, 1.0)
                               .toDouble(),
                         ),
+                        secondary: _theme.secondary,
                         themeId: _selectedTheme,
                       ),
                     );
@@ -1219,22 +1199,35 @@ class _LauncherHomeState extends State<LauncherHome>
         vertical: _theme.minimal ? 14 : 18,
       ),
       decoration: BoxDecoration(
-        color: _theme.background2.withOpacity(
-          _theme.holographic ? 0.64 : 0.42,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            _theme.panel.withOpacity(0.92),
+            _theme.background2.withOpacity(0.76),
+            _theme.secondary.withOpacity(_theme.holographic ? 0.18 : 0.06),
+          ],
         ),
         borderRadius: BorderRadius.circular(_theme.radius),
         border: Border.all(
-          color: _neonColor.withOpacity(
-            _theme.minimal ? 0.25 : 0.55,
-          ),
+          color: _neonColor.withOpacity(_theme.minimal ? 0.4 : 0.8),
           width: _theme.racing ? 2 : 1,
         ),
         boxShadow: [
-          if (!_theme.minimal)
-            BoxShadow(
-              color: _neonColor.withOpacity(0.12 * _neonIntensity),
-              blurRadius: _theme.holographic ? 28 : 16,
+          BoxShadow(
+            color: _neonColor.withOpacity(
+              (_theme.minimal ? 0.06 : 0.18 * _neonIntensity)
+                  .clamp(0.0, 0.8)
+                  .toDouble(),
             ),
+            blurRadius: _theme.holographic ? 32 : 18,
+            spreadRadius: _theme.holographic ? 2 : 0,
+          ),
+          BoxShadow(
+            color: _theme.secondary.withOpacity(0.12),
+            blurRadius: 30,
+            spreadRadius: 2,
+          ),
         ],
       ),
       child: Column(
@@ -1245,14 +1238,15 @@ class _LauncherHomeState extends State<LauncherHome>
               height: 3,
               width: 110,
               margin: const EdgeInsets.only(bottom: 8),
-              color: _neonColor,
+              decoration: BoxDecoration(
+                color: _neonColor,
+                boxShadow: [
+                  BoxShadow(color: _neonColor, blurRadius: 8),
+                ],
+              ),
             ),
           if (_theme.classic)
-            Icon(
-              Icons.speed,
-              color: _neonColor.withOpacity(0.8),
-              size: 23,
-            ),
+            Icon(Icons.speed, color: _neonColor, size: 23),
           Text(
             '$speed',
             style: TextStyle(
@@ -1260,14 +1254,17 @@ class _LauncherHomeState extends State<LauncherHome>
               fontSize: _theme.racing ? 66 : 68,
               fontWeight: FontWeight.w900,
               fontFeatures: const [FontFeature.tabularFigures()],
-              shadows: _theme.minimal
-                  ? []
-                  : [
-                      Shadow(
-                        color: _neonColor.withOpacity(speedGlow),
-                        blurRadius: 20 * speedGlow,
-                      ),
-                    ],
+              shadows: [
+                Shadow(
+                  color: _neonColor.withOpacity(speedGlow),
+                  blurRadius: 22 * speedGlow,
+                ),
+                if (_theme.holographic)
+                  Shadow(
+                    color: _theme.secondary.withOpacity(0.8),
+                    blurRadius: 28,
+                  ),
+              ],
             ),
           ),
           Text(
@@ -1283,13 +1280,10 @@ class _LauncherHomeState extends State<LauncherHome>
           ),
           const SizedBox(height: 8),
           Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 4,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             decoration: BoxDecoration(
               border: Border.all(
-                color: _neonColor.withOpacity(0.5 * _neonIntensity),
+                color: _neonColor.withOpacity(0.7 * _neonIntensity),
               ),
               borderRadius: BorderRadius.circular(
                 _theme.classic ? 4 : _theme.radius,
@@ -1297,7 +1291,7 @@ class _LauncherHomeState extends State<LauncherHome>
               color: Colors.black.withOpacity(0.4),
             ),
             child: Text(
-              _theme.racing ? 'SAIPA  /  SPORT' : 'SAIPA • سایپا',
+              _theme.racing ? 'SAIPA / SPORT' : 'SAIPA • سایپا',
               style: TextStyle(
                 color: _neonColor,
                 fontSize: 10,
@@ -1307,33 +1301,43 @@ class _LauncherHomeState extends State<LauncherHome>
             ),
           ),
           const SizedBox(height: 6),
-          Image.asset(
-            'tiba2_rear.png',
-            height: 52,
-            errorBuilder: (_, __, ___) => const SizedBox(height: 52),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              boxShadow: [
+                BoxShadow(
+                  color: _neonColor.withOpacity(
+                    _theme.minimal ? 0.02 : 0.16 * _neonIntensity,
+                  ),
+                  blurRadius: 20,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: Image.asset(
+              'tiba2_rear.png',
+              height: 52,
+              errorBuilder: (_, __, ___) => const SizedBox(height: 52),
+            ),
           ),
           if (_theme.racing)
             Container(
               height: 3,
               width: 110,
               margin: const EdgeInsets.only(top: 8),
-              color: _neonColor,
+              decoration: BoxDecoration(
+                color: _neonColor,
+                boxShadow: [BoxShadow(color: _neonColor, blurRadius: 8)],
+              ),
             ),
         ],
       ),
     );
   }
 
-  // ------------------------------------------------------------
-  // موزیک پلیر
-  // ------------------------------------------------------------
-
   Widget _buildBottomPlayerBar() {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 5,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: _panelDecoration(),
       child: Row(
         children: [
@@ -1356,28 +1360,20 @@ class _LauncherHomeState extends State<LauncherHome>
                   _tracks.isEmpty
                       ? 'پلیر چندرسانه‌ای'
                       : 'تعداد ترک‌ها: ${_tracks.length}',
-                  style: const TextStyle(
-                    color: Colors.white54,
-                    fontSize: 10,
-                  ),
+                  style: const TextStyle(color: Colors.white54, fontSize: 10),
                 ),
               ],
             ),
           ),
           IconButton(
             tooltip: 'آهنگ قبلی',
-            icon: Icon(
-              Icons.skip_previous,
-              color: _neonColor,
-            ),
+            icon: Icon(Icons.skip_previous, color: _neonColor),
             onPressed: _prevTrack,
           ),
           IconButton(
             tooltip: _isPlaying ? 'توقف موقت' : 'پخش',
             icon: Icon(
-              _isPlaying
-                  ? Icons.pause_circle_filled
-                  : Icons.play_circle_filled,
+              _isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
               color: _neonColor,
               size: 34,
             ),
@@ -1385,20 +1381,13 @@ class _LauncherHomeState extends State<LauncherHome>
           ),
           IconButton(
             tooltip: 'آهنگ بعدی',
-            icon: Icon(
-              Icons.skip_next,
-              color: _neonColor,
-            ),
+            icon: Icon(Icons.skip_next, color: _neonColor),
             onPressed: _nextTrack,
           ),
         ],
       ),
     );
   }
-
-  // ------------------------------------------------------------
-  // پنل خودرو
-  // ------------------------------------------------------------
 
   Widget _buildRightCarPanel() {
     return Container(
@@ -1414,27 +1403,62 @@ class _LauncherHomeState extends State<LauncherHome>
           const Spacer(),
           Expanded(
             flex: 5,
-            child: Image.asset(
-              'tiba2.png',
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) {
-                return Center(
-                  child: Icon(
-                    Icons.directions_car,
-                    size: 90,
-                    color: _neonColor.withOpacity(0.5 * _neonIntensity),
+            child: Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: const Alignment(0, 0.1),
+                  radius: 0.9,
+                  colors: [
+                    _theme.accent.withOpacity(
+                      _theme.minimal ? 0.04 : 0.18 * _neonIntensity,
+                    ),
+                    _theme.secondary.withOpacity(0.04),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: 160,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: _neonColor.withOpacity(
+                            _theme.minimal ? 0.02 : 0.15 * _neonIntensity,
+                          ),
+                          blurRadius: 42,
+                          spreadRadius: 8,
+                        ),
+                      ],
+                    ),
                   ),
-                );
-              },
+                  Image.asset(
+                    'tiba2.png',
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) {
+                      return Icon(
+                        Icons.directions_car,
+                        size: 90,
+                        color: _neonColor.withOpacity(0.7 * _neonIntensity),
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
           const Spacer(),
-          if (_theme.holographic)
-            _sectionLabel('HOLOGRAPHIC DISPLAY'),
-          if (_theme.racing)
-            _sectionLabel('SPORT MODE'),
-          if (_theme.classic)
-            _sectionLabel('CLASSIC DASHBOARD'),
+          if (_theme.holographic) _sectionLabel('HOLOGRAPHIC DISPLAY'),
+          if (_theme.racing) _sectionLabel('SPORT MODE'),
+          if (_theme.classic) _sectionLabel('CLASSIC DASHBOARD'),
+          if (_theme.minimal) _sectionLabel('LUXURY EDITION'),
+          if (_theme.id == 'cyber') _sectionLabel('CYBER DRIVE'),
+          const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
@@ -1474,18 +1498,16 @@ class _LauncherHomeState extends State<LauncherHome>
   }
 }
 
-// ------------------------------------------------------------
-// جاده متحرک با شکل متفاوت در هر تم
-// ------------------------------------------------------------
-
 class RoadPainter extends CustomPainter {
   final double progress;
   final Color color;
+  final Color secondary;
   final String themeId;
 
   RoadPainter({
     required this.progress,
     required this.color,
+    required this.secondary,
     this.themeId = 'cyber',
   });
 
@@ -1498,51 +1520,70 @@ class RoadPainter extends CustomPainter {
     final isHolographic = themeId == 'holographic';
     final isClassic = themeId == 'classic';
 
-    final linePaint = Paint()
-      ..color = color
-      ..strokeWidth = isRacing ? 2.8 : (isLuxury ? 1 : 1.7)
+    final centerX = size.width / 2;
+    final topY = size.height * 0.15;
+    final bottomY = size.height;
+
+    final roadLeft = isRacing ? 0.015 : 0.07;
+    final roadRight = isRacing ? 0.985 : 0.93;
+
+    final top = Offset(centerX, topY);
+    final leftBottom = Offset(size.width * roadLeft, bottomY);
+    final rightBottom = Offset(size.width * roadRight, bottomY);
+
+    final edgePaint = Paint()
+      ..color = color.withOpacity(isLuxury ? 0.45 : 0.95)
+      ..strokeWidth = isRacing ? 2.8 : (isLuxury ? 1.1 : 1.8)
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
-    final top = Offset(size.width * 0.5, size.height * 0.18);
-    final bottomLeft = Offset(
-      size.width * (isRacing ? 0.02 : 0.08),
-      size.height,
-    );
-    final bottomRight = Offset(
-      size.width * (isRacing ? 0.98 : 0.92),
-      size.height,
-    );
+    final roadPath = Path()
+      ..moveTo(top.dx, top.dy)
+      ..lineTo(leftBottom.dx, leftBottom.dy)
+      ..moveTo(top.dx, top.dy)
+      ..lineTo(rightBottom.dx, rightBottom.dy);
 
-    // خطوط کناری جاده
-    canvas.drawLine(top, bottomLeft, linePaint);
-    canvas.drawLine(top, bottomRight, linePaint);
+    canvas.drawPath(roadPath, edgePaint);
 
-    // تم فضایی: خطوط شبکه افقی و نورهای موازی
+    // نور حاشیه‌های جاده
+    if (!isLuxury) {
+      final glowPaint = Paint()
+        ..color = color.withOpacity(0.12)
+        ..strokeWidth = isRacing ? 10 : 7
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8)
+        ..style = PaintingStyle.stroke;
+
+      canvas.drawPath(roadPath, glowPaint);
+    }
+
+    // تم هولوگرافیک: شبکه فضایی بنفش
     if (isHolographic) {
       final gridPaint = Paint()
-        ..color = color.withOpacity(0.42)
+        ..color = color.withOpacity(0.6)
         ..strokeWidth = 1
         ..style = PaintingStyle.stroke;
 
-      for (int i = 0; i < 9; i++) {
-        final t = (progress + i / 9) % 1.0;
-        final y = top.dy + (size.height - top.dy) * t * t;
-        final halfWidth = size.width * 0.48 * t;
+      final secondPaint = Paint()
+        ..color = secondary.withOpacity(0.55)
+        ..strokeWidth = 1.3
+        ..style = PaintingStyle.stroke;
+
+      for (int i = 0; i < 12; i++) {
+        final t = (progress + i / 12) % 1.0;
+        final y = topY + (bottomY - topY) * t * t;
+        final halfWidth = size.width * 0.47 * t;
 
         canvas.drawLine(
-          Offset(size.width / 2 - halfWidth, y),
-          Offset(size.width / 2 + halfWidth, y),
-          gridPaint,
+          Offset(centerX - halfWidth, y),
+          Offset(centerX + halfWidth, y),
+          i.isEven ? gridPaint : secondPaint,
         );
       }
 
-      for (int i = -2; i <= 2; i++) {
-        final endX = size.width / 2 + i * size.width * 0.16;
-
+      for (int i = -4; i <= 4; i++) {
         canvas.drawLine(
           top,
-          Offset(endX, size.height),
+          Offset(centerX + i * size.width * 0.12, bottomY),
           gridPaint,
         );
       }
@@ -1550,21 +1591,21 @@ class RoadPainter extends CustomPainter {
       return;
     }
 
-    // تم کلاسیک: خطوط باریک و منظم، بدون جلوه پرنور
+    // تم کلاسیک: خط وسط و نوارهای کوتاه
     if (isClassic) {
       final centerPaint = Paint()
-        ..color = color.withOpacity(0.75)
-        ..strokeWidth = 2
-        ..style = PaintingStyle.stroke;
+        ..color = color.withOpacity(0.8)
+        ..strokeWidth = 2.2
+        ..strokeCap = StrokeCap.round;
 
-      for (int i = 0; i < 7; i++) {
-        final t = (progress + i / 7) % 1.0;
-        final y = top.dy + (size.height - top.dy) * t * t;
-        final halfWidth = size.width * 0.06 * t;
+      for (int i = 0; i < 9; i++) {
+        final t = (progress + i / 9) % 1.0;
+        final y = topY + (bottomY - topY) * t * t;
+        final halfWidth = size.width * 0.025 * t + 1;
 
         canvas.drawLine(
-          Offset(size.width / 2 - halfWidth, y),
-          Offset(size.width / 2 + halfWidth, y),
+          Offset(centerX - halfWidth, y),
+          Offset(centerX + halfWidth, y),
           centerPaint,
         );
       }
@@ -1572,34 +1613,50 @@ class RoadPainter extends CustomPainter {
       return;
     }
 
-    // تم لوکس: تعداد خطوط کمتر و نور ملایم‌تر
-    final count = isLuxury ? 3 : (isRacing ? 8 : 5);
+    // خطوط متحرک جاده
+    final count = isLuxury ? 3 : (isRacing ? 10 : 6);
 
     for (int i = 0; i < count; i++) {
       final t = (progress + i / count) % 1.0;
-      final y = top.dy + (size.height - top.dy) * t * t;
+      final y = topY + (bottomY - topY) * t * t;
 
-      final x1 = top.dx - (top.dx - bottomLeft.dx) * t;
-      final x2 = top.dx + (bottomRight.dx - top.dx) * t;
+      final leftX = centerX - (centerX - leftBottom.dx) * t;
+      final rightX = centerX + (rightBottom.dx - centerX) * t;
+
+      final dashPaint = Paint()
+        ..color = (i.isEven ? color : secondary).withOpacity(
+          (0.25 + 0.75 * t).clamp(0.0, 1.0),
+        )
+        ..strokeWidth = isRacing ? 2.6 : (isLuxury ? 1.0 : 1.6)
+        ..strokeCap = StrokeCap.round;
+
+      final dashLength = isLuxury ? 0.035 : (isRacing ? 0.075 : 0.055);
+      final y2 = (y + size.height * dashLength * t).clamp(topY, bottomY);
 
       canvas.drawLine(
-        Offset(x1, y),
-        Offset(x2, y),
-        linePaint,
+        Offset(leftX, y),
+        Offset(centerX - (centerX - leftBottom.dx) * (y2 - topY) / (bottomY - topY), y2),
+        dashPaint,
+      );
+
+      canvas.drawLine(
+        Offset(rightX, y),
+        Offset(centerX + (rightBottom.dx - centerX) * (y2 - topY) / (bottomY - topY), y2),
+        dashPaint,
       );
     }
 
-    // تم مسابقه‌ای: خطوط سرعت در حاشیه‌ها
+    // خطوط سرعت اضافه در تم مسابقه‌ای
     if (isRacing) {
       final streakPaint = Paint()
-        ..color = color.withOpacity(0.65)
-        ..strokeWidth = 2
-        ..style = PaintingStyle.stroke;
+        ..color = secondary.withOpacity(0.75)
+        ..strokeWidth = 2.3
+        ..strokeCap = StrokeCap.round;
 
-      for (int i = 0; i < 4; i++) {
-        final t = (progress + i / 4) % 1.0;
-        final y = top.dy + (size.height - top.dy) * t * t;
-        final width = size.width * 0.06 * t;
+      for (int i = 0; i < 7; i++) {
+        final t = (progress + i / 7) % 1.0;
+        final y = topY + (bottomY - topY) * t * t;
+        final width = size.width * (0.035 + 0.07 * t);
 
         canvas.drawLine(
           Offset(0, y),
@@ -1614,12 +1671,29 @@ class RoadPainter extends CustomPainter {
         );
       }
     }
+
+    // خطوط طلایی موازی و ظریف در تم لوکس
+    if (isLuxury) {
+      final goldPaint = Paint()
+        ..color = secondary.withOpacity(0.65)
+        ..strokeWidth = 1
+        ..style = PaintingStyle.stroke;
+
+      final innerPath = Path()
+        ..moveTo(centerX, topY)
+        ..lineTo(size.width * 0.20, bottomY)
+        ..moveTo(centerX, topY)
+        ..lineTo(size.width * 0.80, bottomY);
+
+      canvas.drawPath(innerPath, goldPaint);
+    }
   }
 
   @override
   bool shouldRepaint(covariant RoadPainter oldDelegate) {
     return oldDelegate.progress != progress ||
         oldDelegate.color != color ||
+        oldDelegate.secondary != secondary ||
         oldDelegate.themeId != themeId;
   }
 }
