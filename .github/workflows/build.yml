@@ -28,6 +28,7 @@ jobs:
       - name: Create Flutter Project
         run: |
           flutter create --org com.tiba2 tiba_project
+
           cd tiba_project
 
           cp ../pubspec.yaml pubspec.yaml
@@ -41,50 +42,55 @@ jobs:
             cp ../tiba2_rear.png ./
           fi
 
-      - name: Fix Kotlin & Android SDK Configuration
+      - name: Configure Android Build
         run: |
           cd tiba_project
 
-          # 1. تثبیت نسخه کاتلین در settings.gradle
-          SETTINGS="android/settings.gradle"
-          if [ -f "$SETTINGS" ]; then
-            sed -i -E 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.22"/' "$SETTINGS" || true
-            sed -i -E "s/id 'org.jetbrains.kotlin.android' version '[^']*'/id 'org.jetbrains.kotlin.android' version '1.9.22'/" "$SETTINGS" || true
-          fi
+          echo "===== Gradle configuration ====="
 
-          # 2. تنظیم SDK پایدار ۳۴ (رفع خطای android-35 aapt2)
-          APP_GRADLE="android/app/build.gradle"
-          if [ -f "$APP_GRADLE" ]; then
-            sed -i 's/compileSdk = .*/compileSdk = 34/' "$APP_GRADLE" || true
-            sed -i 's/compileSdkVersion .*/compileSdkVersion 34/' "$APP_GRADLE" || true
-            sed -i 's/targetSdkVersion .*/targetSdkVersion 34/' "$APP_GRADLE" || true
-            sed -i 's/targetSdk = .*/targetSdk = 34/' "$APP_GRADLE" || true
-            sed -i 's/buildToolsVersion .*/buildToolsVersion "34.0.0"/' "$APP_GRADLE" || true
-          fi
+          cat android/settings.gradle
 
-          # 3. رفع خطای metadata mismatch کاتلین در سطح تمام ماژول‌ها و پکیج‌ها
-          BUILD_GRADLE="android/build.gradle"
-          if [ -f "$BUILD_GRADLE" ]; then
-            sed -i "s/ext.kotlin_version = .*/ext.kotlin_version = '1.9.22'/" "$BUILD_GRADLE" || true
-            cat >> "$BUILD_GRADLE" << 'EOF'
+          cat android/build.gradle
 
-          allprojects {
-              tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-                  kotlinOptions {
-                      jvmTarget = "1.8"
-                      freeCompilerArgs += ["-Xskip-metadata-version-check"]
-                  }
-              }
-              configurations.all {
-                  resolutionStrategy.eachDependency { details ->
-                      if (details.requested.group == 'org.jetbrains.kotlin') {
-                          details.useVersion '1.9.22'
-                      }
-                  }
-              }
-          }
-          EOF
-          fi
+          echo "===== Configure Kotlin ====="
+
+          sed -i -E \
+            's/version "[0-9.]+"/version "1.9.22"/' \
+            android/settings.gradle
+
+          echo "===== Configure Android SDK ====="
+
+          sed -i -E \
+            's/compileSdk = flutter.compileSdkVersion/compileSdk = 34/' \
+            android/app/build.gradle
+
+          sed -i -E \
+            's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 34/' \
+            android/app/build.gradle
+
+          sed -i -E \
+            's/targetSdk = flutter.targetSdkVersion/targetSdk = 34/' \
+            android/app/build.gradle
+
+          sed -i -E \
+            's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 34/' \
+            android/app/build.gradle
+
+          echo "===== Install Android SDK 34 ====="
+
+          yes | sdkmanager --licenses >/dev/null || true
+
+          sdkmanager \
+            "platforms;android-34" \
+            "build-tools;34.0.0"
+
+          echo "===== Verify configuration ====="
+
+          grep -n "kotlin.android" android/settings.gradle || true
+
+          grep -n "compileSdk" android/app/build.gradle || true
+
+          grep -n "targetSdk" android/app/build.gradle || true
 
       - name: Configure Android Manifest
         run: |
@@ -92,15 +98,44 @@ jobs:
 
           MANIFEST="android/app/src/main/AndroidManifest.xml"
 
-          sed -i 's/<application/<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"\/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"\/>\n    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"\/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"\/>\n    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"\/>\n    <application/' "$MANIFEST"
+          python3 - <<'PY'
+          from pathlib import Path
 
-          sed -i 's/<category android:name="android.intent.category.LAUNCHER"\/>/<category android:name="android.intent.category.LAUNCHER"\/>\n                <category android:name="android.intent.category.HOME"\/>\n                <category android:name="android.intent.category.DEFAULT"\/>/' "$MANIFEST"
+          p = Path("android/app/src/main/AndroidManifest.xml")
+          s = p.read_text()
 
-      - name: Configure Complete Vehicle Native Actions
+          permissions = [
+              "android.permission.ACCESS_FINE_LOCATION",
+              "android.permission.ACCESS_COARSE_LOCATION",
+              "android.permission.QUERY_ALL_PACKAGES",
+              "android.permission.READ_EXTERNAL_STORAGE",
+              "android.permission.READ_MEDIA_AUDIO",
+          ]
+
+          for permission in permissions:
+              tag = f'<uses-permission android:name="{permission}" />'
+              if permission not in s:
+                  s = s.replace("<application", tag + "\n    <application", 1)
+
+          launcher = '<category android:name="android.intent.category.LAUNCHER" />'
+          home = '<category android:name="android.intent.category.HOME" />'
+          default = '<category android:name="android.intent.category.DEFAULT" />'
+
+          if launcher in s:
+              if home not in s:
+                  s = s.replace(launcher, launcher + "\n                " + home, 1)
+              if default not in s:
+                  s = s.replace(launcher, launcher + "\n                " + default, 1)
+
+          p.write_text(s)
+          PY
+
+      - name: Configure Vehicle Native Actions
         run: |
           cd tiba_project
 
           KT_PATH="android/app/src/main/kotlin/com/tiba2/tiba_project/MainActivity.kt"
+
           mkdir -p "$(dirname "$KT_PATH")"
 
           cat > "$KT_PATH" <<'EOF'
@@ -124,7 +159,7 @@ jobs:
           import io.flutter.embedding.engine.FlutterEngine
           import io.flutter.plugin.common.MethodChannel
 
-          class MainActivity: FlutterActivity(), LocationListener {
+          class MainActivity : FlutterActivity(), LocationListener {
               private val CHANNEL = "com.tiba2.launcher/actions"
               private var locationManager: LocationManager? = null
               private var methodChannel: MethodChannel? = null
@@ -132,159 +167,252 @@ jobs:
 
               override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
                   super.configureFlutterEngine(flutterEngine)
-                  methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
-                  methodChannel?.setMethodCallHandler { call, result ->
-                      if (call.method == "open") {
-                          val action = call.argument<String>("action") ?: ""
-                          val pkg = call.argument<String>("pkg") ?: ""
 
-                          when (action) {
-                              "settings" -> {
-                                  tryLaunch(Intent(Settings.ACTION_SETTINGS), result)
+                  methodChannel = MethodChannel(
+                      flutterEngine.dartExecutor.binaryMessenger,
+                      CHANNEL
+                  )
+
+                  methodChannel?.setMethodCallHandler { call, result ->
+                      if (call.method != "open") {
+                          result.notImplemented()
+                          return@setMethodCallHandler
+                      }
+
+                      val action = call.argument<String>("action") ?: ""
+                      val pkg = call.argument<String>("pkg") ?: ""
+
+                      when (action) {
+                          "settings" ->
+                              tryLaunch(Intent(Settings.ACTION_SETTINGS), result)
+
+                          "location_settings" ->
+                              tryLaunch(
+                                  Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS),
+                                  result
+                              )
+
+                          "request_location" -> {
+                              checkAndRequestLocation()
+                              result.success(true)
+                          }
+
+                          "nav" -> {
+                              var launched = false
+
+                              if (pkg.isNotEmpty()) {
+                                  launched = launchPackage(pkg)
                               }
-                              "location_settings" -> {
-                                  tryLaunch(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS), result)
+
+                              if (!launched &&
+                                  (pkg.contains("neshan") || pkg.isEmpty())) {
+                                  launched =
+                                      launchPackage("ir.neshan.sp") ||
+                                      launchPackage("org.neshan.maps.and.navi")
                               }
-                              "request_location" -> {
-                                  checkAndRequestLocation()
-                                  result.success(true)
+
+                              if (!launched &&
+                                  (pkg.contains("balad") || pkg.isEmpty())) {
+                                  launched = launchPackage("ir.balad.navigation")
                               }
-                              "nav" -> {
-                                  var launched = false
-                                  if (pkg.isNotEmpty() && launchPackage(pkg)) {
-                                      launched = true
-                                  }
-                                  if (!launched && (pkg.contains("neshan") || pkg.isEmpty())) {
-                                      launched = launchPackage("ir.neshan.sp") || launchPackage("org.neshan.maps.and.navi")
-                                  }
-                                  if (!launched && (pkg.contains("balad") || pkg.isEmpty())) {
-                                      launched = launchPackage("ir.balad.navigation")
-                                  }
-                                  if (!launched) {
-                                      val mapIntent = Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=")).apply {
-                                          flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                      }
-                                      try {
-                                          val chooser = Intent.createChooser(mapIntent, "انتخاب مسیریاب")
-                                          chooser.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                          startActivity(chooser)
-                                          result.success(true)
-                                      } catch (e: Exception) {
-                                          result.success(false)
-                                      }
-                                  } else {
-                                      result.success(true)
-                                  }
-                              }
-                              "radio" -> {
-                                  val radioPackages = listOf(
-                                      "com.syu.radio", "com.microntek.radio", "com.autochips.radio",
-                                      "com.ts.fmradio", "com.tw.radio", "com.android.fmradio"
-                                  )
-                                  var launched = launchFirstAvailable(radioPackages)
-                                  if (!launched) {
-                                      tryLaunch(Intent(Intent.ACTION_MAIN).also { it.addCategory(Intent.CATEGORY_APP_MUSIC) }, result)
-                                  } else {
-                                      result.success(true)
-                                  }
-                              }
-                              "phone" -> {
-                                  val phonePackages = listOf(
-                                      "com.syu.bt", "com.microntek.bluelet", "com.ts.bt", "com.tw.bt", "com.android.dialer"
-                                  )
-                                  var launched = launchFirstAvailable(phonePackages)
-                                  if (!launched) {
-                                      val intent = Intent(Intent.ACTION_DIAL).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
-                                      tryLaunch(intent, result)
-                                  } else {
-                                      result.success(true)
-                                  }
-                              }
-                              "apps" -> {
+
+                              if (!launched) {
                                   try {
-                                      val intent = Intent(Intent.ACTION_MAIN).apply {
-                                          addCategory(Intent.CATEGORY_LAUNCHER)
-                                          flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                      }
-                                      val chooser = Intent.createChooser(intent, "تمام برنامه‌ها")
-                                      chooser.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                      val intent = Intent(
+                                          Intent.ACTION_VIEW,
+                                          Uri.parse("geo:0,0?q=")
+                                      )
+                                      val chooser = Intent.createChooser(
+                                          intent,
+                                          "انتخاب مسیریاب"
+                                      )
+                                      chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                       startActivity(chooser)
                                       result.success(true)
                                   } catch (e: Exception) {
                                       result.success(false)
                                   }
-                              }
-                              "music" -> {
-                                  val musicPackages = listOf(
-                                      "com.syu.music", "com.microntek.music", "com.ts.music", "com.tw.music"
-                                  )
-                                  val launched = launchFirstAvailable(musicPackages)
-                                  if (!launched) {
-                                      tryLaunch(Intent(MediaStore.INTENT_ACTION_MUSIC_PLAYER), result)
-                                  } else {
-                                      result.success(true)
-                                  }
-                              }
-                              "media_play_pause" -> {
-                                  sendMediaKeyEvent(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+                              } else {
                                   result.success(true)
                               }
-                              "media_next" -> {
-                                  sendMediaKeyEvent(KeyEvent.KEYCODE_MEDIA_NEXT)
-                                  result.success(true)
-                              }
-                              "media_prev" -> {
-                                  sendMediaKeyEvent(KeyEvent.KEYCODE_MEDIA_PREVIOUS)
-                                  result.success(true)
-                              }
-                              else -> result.notImplemented()
                           }
-                      } else {
-                          result.notImplemented()
+
+                          "radio" -> {
+                              val packages = listOf(
+                                  "com.syu.radio",
+                                  "com.microntek.radio",
+                                  "com.autochips.radio",
+                                  "com.ts.fmradio",
+                                  "com.tw.radio",
+                                  "com.android.fmradio"
+                              )
+
+                              if (launchFirstAvailable(packages)) {
+                                  result.success(true)
+                              } else {
+                                  tryLaunch(
+                                      Intent(Intent.ACTION_MAIN).apply {
+                                          addCategory(Intent.CATEGORY_APP_MUSIC)
+                                      },
+                                      result
+                                  )
+                              }
+                          }
+
+                          "phone" -> {
+                              val packages = listOf(
+                                  "com.syu.bt",
+                                  "com.microntek.bluelet",
+                                  "com.ts.bt",
+                                  "com.tw.bt",
+                                  "com.android.dialer"
+                              )
+
+                              if (launchFirstAvailable(packages)) {
+                                  result.success(true)
+                              } else {
+                                  tryLaunch(Intent(Intent.ACTION_DIAL), result)
+                              }
+                          }
+
+                          "apps" -> {
+                              try {
+                                  val intent = Intent(Intent.ACTION_MAIN).apply {
+                                      addCategory(Intent.CATEGORY_LAUNCHER)
+                                  }
+                                  val chooser = Intent.createChooser(
+                                      intent,
+                                      "تمام برنامه‌ها"
+                                  )
+                                  chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                  startActivity(chooser)
+                                  result.success(true)
+                              } catch (e: Exception) {
+                                  result.success(false)
+                              }
+                          }
+
+                          "music" -> {
+                              val packages = listOf(
+                                  "com.syu.music",
+                                  "com.microntek.music",
+                                  "com.ts.music",
+                                  "com.tw.music"
+                              )
+
+                              if (launchFirstAvailable(packages)) {
+                                  result.success(true)
+                              } else {
+                                  tryLaunch(
+                                      Intent(MediaStore.INTENT_ACTION_MUSIC_PLAYER),
+                                      result
+                                  )
+                              }
+                          }
+
+                          "media_play_pause" -> {
+                              sendMediaKeyEvent(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+                              result.success(true)
+                          }
+
+                          "media_next" -> {
+                              sendMediaKeyEvent(KeyEvent.KEYCODE_MEDIA_NEXT)
+                              result.success(true)
+                          }
+
+                          "media_prev" -> {
+                              sendMediaKeyEvent(KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+                              result.success(true)
+                          }
+
+                          else -> result.notImplemented()
                       }
                   }
               }
 
               private fun checkAndRequestLocation() {
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                      if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                          requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), PERMISSION_REQUEST_CODE)
-                          return
-                      }
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+                      checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+                      != PackageManager.PERMISSION_GRANTED) {
+
+                      requestPermissions(
+                          arrayOf(
+                              Manifest.permission.ACCESS_FINE_LOCATION,
+                              Manifest.permission.ACCESS_COARSE_LOCATION
+                          ),
+                          PERMISSION_REQUEST_CODE
+                      )
+                      return
                   }
+
                   startGpsTracking()
               }
 
-              override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-                  super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-                  if (requestCode == PERMISSION_REQUEST_CODE && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+              override fun onRequestPermissionsResult(
+                  requestCode: Int,
+                  permissions: Array<out String>,
+                  grantResults: IntArray
+              ) {
+                  super.onRequestPermissionsResult(
+                      requestCode,
+                      permissions,
+                      grantResults
+                  )
+
+                  if (requestCode == PERMISSION_REQUEST_CODE &&
+                      grantResults.isNotEmpty() &&
+                      grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                       startGpsTracking()
                   }
               }
 
               private fun startGpsTracking() {
                   try {
-                      locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
-                      locationManager?.requestLocationUpdates(LocationManager.GPS_PROVIDER, 500L, 0f, this)
-                      locationManager?.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 1000L, 0f, this)
+                      locationManager =
+                          getSystemService(Context.LOCATION_SERVICE) as LocationManager
+
+                      locationManager?.requestLocationUpdates(
+                          LocationManager.GPS_PROVIDER,
+                          500L,
+                          0f,
+                          this
+                      )
+
+                      try {
+                          locationManager?.requestLocationUpdates(
+                              LocationManager.NETWORK_PROVIDER,
+                              1000L,
+                              0f,
+                              this
+                          )
+                      } catch (_: Exception) {
+                      }
                   } catch (e: SecurityException) {
+                      e.printStackTrace()
+                  } catch (e: Exception) {
                       e.printStackTrace()
                   }
               }
 
               private fun sendMediaKeyEvent(keyCode: Int) {
-                  val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-                  val eventDown = KeyEvent(KeyEvent.ACTION_DOWN, keyCode)
-                  val eventUp = KeyEvent(KeyEvent.ACTION_UP, keyCode)
-                  audioManager.dispatchMediaKeyEvent(eventDown)
-                  audioManager.dispatchMediaKeyEvent(eventUp)
+                  val audioManager =
+                      getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+                  audioManager.dispatchMediaKeyEvent(
+                      KeyEvent(KeyEvent.ACTION_DOWN, keyCode)
+                  )
+
+                  audioManager.dispatchMediaKeyEvent(
+                      KeyEvent(KeyEvent.ACTION_UP, keyCode)
+                  )
               }
 
               private fun launchPackage(pkg: String): Boolean {
                   return try {
                       val intent = packageManager.getLaunchIntentForPackage(pkg)
+
                       if (intent != null) {
-                          intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                          intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                           startActivity(intent)
                           true
                       } else {
@@ -302,9 +430,12 @@ jobs:
                   return false
               }
 
-              private fun tryLaunch(intent: Intent, result: MethodChannel.Result?): Boolean {
+              private fun tryLaunch(
+                  intent: Intent,
+                  result: MethodChannel.Result?
+              ): Boolean {
                   return try {
-                      intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                      intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                       startActivity(intent)
                       result?.success(true)
                       true
@@ -316,16 +447,29 @@ jobs:
 
               override fun onLocationChanged(location: Location) {
                   val speedKmh = location.speed * 3.6f
+
                   runOnUiThread {
                       methodChannel?.invokeMethod("onSpeed", speedKmh)
                   }
               }
 
-              override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+              @Deprecated("Deprecated in Android API")
+              override fun onStatusChanged(
+                  provider: String?,
+                  status: Int,
+                  extras: Bundle?
+              ) {}
+
               override fun onProviderEnabled(provider: String) {}
+
               override fun onProviderDisabled(provider: String) {}
           }
           EOF
+
+      - name: Resolve Flutter Dependencies
+        run: |
+          cd tiba_project
+          flutter pub get
 
       - name: Build APK
         run: |
