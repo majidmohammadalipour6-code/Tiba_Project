@@ -52,7 +52,7 @@ jobs:
 
           MANIFEST="android/app/src/main/AndroidManifest.xml"
 
-          sed -i 's/<application/<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"\/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"\/>\n    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"\/>\n    <application/' "$MANIFEST"
+          sed -i 's/<application/<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"\/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"\/>\n    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"\/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"\/>\n    <application/' "$MANIFEST"
 
           sed -i 's/<category android:name="android.intent.category.LAUNCHER"\/>/<category android:name="android.intent.category.LAUNCHER"\/>\n                <category android:name="android.intent.category.HOME"\/>\n                <category android:name="android.intent.category.DEFAULT"\/>/' "$MANIFEST"
 
@@ -67,14 +67,19 @@ jobs:
           package com.tiba2.tiba_project
 
           import android.Manifest
+          import android.content.Context
           import android.content.Intent
           import android.content.pm.PackageManager
           import android.location.Location
           import android.location.LocationListener
           import android.location.LocationManager
+          import android.media.AudioManager
           import android.net.Uri
+          import android.os.Build
           import android.os.Bundle
+          import android.provider.MediaStore
           import android.provider.Settings
+          import android.view.KeyEvent
           import io.flutter.embedding.android.FlutterActivity
           import io.flutter.embedding.engine.FlutterEngine
           import io.flutter.plugin.common.MethodChannel
@@ -83,62 +88,185 @@ jobs:
               private val CHANNEL = "com.tiba2.launcher/actions"
               private var locationManager: LocationManager? = null
               private var methodChannel: MethodChannel? = null
+              private val PERMISSION_REQUEST_CODE = 1001
 
               override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
                   super.configureFlutterEngine(flutterEngine)
                   methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
                   methodChannel?.setMethodCallHandler { call, result ->
-                      when (call.method) {
-                          "openSettings" -> {
-                              val intent = Intent(Settings.ACTION_SETTINGS)
-                              intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                              startActivity(intent)
-                              result.success(true)
+                      if (call.method == "open") {
+                          val action = call.argument<String>("action") ?: ""
+                          val pkg = call.argument<String>("pkg") ?: ""
+
+                          when (action) {
+                              "settings" -> {
+                                  tryLaunch(Intent(Settings.ACTION_SETTINGS), result)
+                              }
+                              "location_settings" -> {
+                                  tryLaunch(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS), result)
+                              }
+                              "request_location" -> {
+                                  checkAndRequestLocation()
+                                  result.success(true)
+                              }
+                              "nav" -> {
+                                  var launched = false
+                                  if (pkg.isNotEmpty()) {
+                                      launched = launchPackage(pkg)
+                                  }
+                                  if (!launched) {
+                                      launched = launchFirstAvailable(listOf(
+                                          "ir.neshan.sp",
+                                          "org.neshan.maps.and.navi",
+                                          "ir.balad.navigation",
+                                          "com.google.android.apps.maps",
+                                          "com.waze"
+                                      ))
+                                  }
+                                  if (!launched) {
+                                      tryLaunch(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=")), result)
+                                  } else {
+                                      result.success(true)
+                                  }
+                              }
+                              "radio" -> {
+                                  val launched = launchFirstAvailable(listOf(
+                                      "com.syu.radio",
+                                      "com.microntek.radio",
+                                      "com.autochips.radio",
+                                      "com.android.fmradio",
+                                      "com.car.radio"
+                                  ))
+                                  if (!launched) {
+                                      tryLaunch(Intent(Intent.ACTION_MAIN).also { it.addCategory(Intent.CATEGORY_APP_MUSIC) }, result)
+                                  } else {
+                                      result.success(true)
+                                  }
+                              }
+                              "phone" -> {
+                                  val intent = Intent(Intent.ACTION_DIAL)
+                                  val launched = tryLaunch(intent, null)
+                                  if (!launched) {
+                                      launchFirstAvailable(listOf(
+                                          "com.syu.bt",
+                                          "com.microntek.bluelet",
+                                          "com.android.dialer"
+                                      ))
+                                  }
+                                  result.success(true)
+                              }
+                              "apps" -> {
+                                  try {
+                                      val intent = Intent(Intent.ACTION_MAIN).apply {
+                                          addCategory(Intent.CATEGORY_LAUNCHER)
+                                          flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                      }
+                                      startActivity(Intent.createChooser(intent, "برنامه‌ها"))
+                                      result.success(true)
+                                  } catch (e: Exception) {
+                                      result.success(false)
+                                  }
+                              }
+                              "music" -> {
+                                  val launched = launchFirstAvailable(listOf(
+                                      "com.syu.music",
+                                      "com.microntek.music",
+                                      "com.android.music"
+                                  ))
+                                  if (!launched) {
+                                      tryLaunch(Intent(MediaStore.INTENT_ACTION_MUSIC_PLAYER), result)
+                                  } else {
+                                      result.success(true)
+                                  }
+                              }
+                              "media_play_pause" -> {
+                                  sendMediaKeyEvent(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+                                  result.success(true)
+                              }
+                              "media_next" -> {
+                                  sendMediaKeyEvent(KeyEvent.KEYCODE_MEDIA_NEXT)
+                                  result.success(true)
+                              }
+                              "media_prev" -> {
+                                  sendMediaKeyEvent(KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+                                  result.success(true)
+                              }
+                              else -> result.notImplemented()
                           }
-                          "openLocationSettings" -> {
-                              val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
-                              intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                              startActivity(intent)
-                              result.success(true)
-                          }
-                          "openRadio" -> {
-                              val radioIntent = packageManager.getLaunchIntentForPackage("com.android.fmradio")
-                                  ?: Intent(Intent.ACTION_MAIN).also { it.addCategory(Intent.CATEGORY_APP_MUSIC) }
-                              radioIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                              try { startActivity(radioIntent); result.success(true) } catch (e: Exception) { result.success(false) }
-                          }
-                          "openDialer" -> {
-                              val intent = Intent(Intent.ACTION_DIAL)
-                              intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                              startActivity(intent)
-                              result.success(true)
-                          }
-                          "openMaps" -> {
-                              val intent = Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q="))
-                              intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                              startActivity(intent)
-                              result.success(true)
-                          }
-                          "startGps" -> {
-                              startGpsTracking()
-                              result.success(true)
-                          }
-                          else -> result.notImplemented()
+                      } else {
+                          result.notImplemented()
                       }
                   }
               }
 
+              private fun checkAndRequestLocation() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                      if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                          requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), PERMISSION_REQUEST_CODE)
+                          return
+                      }
+                  }
+                  startGpsTracking()
+              }
+
+              override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+                  super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+                  if (requestCode == PERMISSION_REQUEST_CODE && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                      startGpsTracking()
+                  }
+              }
+
               private fun startGpsTracking() {
-                  locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
-                  if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                  try {
+                      locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
                       locationManager?.requestLocationUpdates(LocationManager.GPS_PROVIDER, 500L, 0f, this)
+                      locationManager?.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 1000L, 0f, this)
+                  } catch (e: SecurityException) {
+                      e.printStackTrace()
+                  }
+              }
+
+              private fun sendMediaKeyEvent(keyCode: Int) {
+                  val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                  val eventDown = KeyEvent(KeyEvent.ACTION_DOWN, keyCode)
+                  val eventUp = KeyEvent(KeyEvent.ACTION_UP, keyCode)
+                  audioManager.dispatchMediaKeyEvent(eventDown)
+                  audioManager.dispatchMediaKeyEvent(eventUp)
+              }
+
+              private fun launchPackage(pkg: String): Boolean {
+                  val intent = packageManager.getLaunchIntentForPackage(pkg)
+                  if (intent != null) {
+                      intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                      startActivity(intent)
+                      return true
+                  }
+                  return false
+              }
+
+              private fun launchFirstAvailable(packages: List<String>): Boolean {
+                  for (pkg in packages) {
+                      if (launchPackage(pkg)) return true
+                  }
+                  return false
+              }
+
+              private fun tryLaunch(intent: Intent, result: MethodChannel.Result?): Boolean {
+                  return try {
+                      intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                      startActivity(intent)
+                      result?.success(true)
+                      true
+                  } catch (e: Exception) {
+                      result?.success(false)
+                      false
                   }
               }
 
               override fun onLocationChanged(location: Location) {
                   val speedKmh = location.speed * 3.6f
                   runOnUiThread {
-                      methodChannel?.invokeMethod("onSpeedUpdate", speedKmh)
+                      methodChannel?.invokeMethod("onSpeed", speedKmh)
                   }
               }
 
