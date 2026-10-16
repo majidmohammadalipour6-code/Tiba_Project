@@ -1,5 +1,5 @@
 name: tiba_project
-description: "Tiba 2 Custom Car Launcher"
+description: "Tiba 2 Cyber Launcher Dashboard"
 publish_to: "none"
 version: 1.0.0+1
 
@@ -9,19 +9,18 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  geolocator: ^13.0.2
-  just_audio: ^0.9.40
-  file_picker: ^8.1.2
-  wakelock_plus: ^1.2.8
-  android_intent_plus: ^5.1.0
-  shared_preferences: ^2.3.2
+  cupertino_icons: ^1.0.8
+  permission_handler: ^11.3.1
+  file_picker: ^8.1.3
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_lints: ^4.0.0
 
 flutter:
   uses-material-design: true
+
   assets:
     - tiba2.png
     - tiba2_rear.png
