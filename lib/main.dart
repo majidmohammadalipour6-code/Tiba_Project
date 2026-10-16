@@ -316,6 +316,81 @@ class _LauncherHomeState extends State<LauncherHome>
     );
   }
 
+  void _openStyleSettings() {
+    final presets = <MapEntry<String, Color>>[
+      const MapEntry('فیروزه‌ای اسپرت', Color(0xFF00E5FF)),
+      const MapEntry('بنفش نئونی', Color(0xFFB388FF)),
+      const MapEntry('قرمز مسابقه‌ای', Color(0xFFFF3B5C)),
+      const MapEntry('سبز اسپرت', Color(0xFF39FF88)),
+      const MapEntry('سفید یخی', Color(0xFFEAF7FF)),
+    ];
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (dialogContext, setDlgState) => AlertDialog(
+          backgroundColor: const Color(0xFF0F172A),
+          shape: RoundedRectangleBorder(
+            side: BorderSide(color: _neonColor, width: 1.5),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(
+            'تنظیم سبک نمایش',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: _neonColor, fontWeight: FontWeight.bold),
+          ),
+          content: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'سبک نورپردازی و ظاهر لانچر را انتخاب کن:',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white70),
+                ),
+                const SizedBox(height: 12),
+                ...presets.map((preset) => ListTile(
+                      dense: true,
+                      leading: Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: preset.value,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: preset.value.withOpacity(0.45),
+                              blurRadius: 8,
+                            ),
+                          ],
+                        ),
+                      ),
+                      title: Text(preset.key,
+                          style: const TextStyle(color: Colors.white)),
+                      trailing: _neonColor.value == preset.value.value
+                          ? Icon(Icons.check_circle, color: preset.value)
+                          : null,
+                      onTap: () {
+                        setState(() => _neonColor = preset.value);
+                        setDlgState(() {});
+                        _savePreferences();
+                      },
+                    )),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('بستن', style: TextStyle(color: _neonColor)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _openNeonSettings() {
     showDialog(
       context: context,
@@ -556,6 +631,11 @@ class _LauncherHomeState extends State<LauncherHome>
             tooltip: 'تنظیم رنگ و نور',
             icon: Icon(Icons.palette_outlined, color: _neonColor, size: 27),
             onPressed: _openNeonSettings,
+          ),
+          IconButton(
+            tooltip: 'تنظیم سبک',
+            icon: Icon(Icons.dashboard_customize_outlined, color: _neonColor, size: 27),
+            onPressed: _openStyleSettings,
           ),
           IconButton(
             tooltip: 'مسیریاب',
@@ -960,21 +1040,21 @@ class RoadPainter extends CustomPainter {
     canvas.drawLine(leftEdgeTop, leftEdgeBottom, edgePaint);
     canvas.drawLine(rightEdgeTop, rightEdgeBottom, edgePaint);
 
-    // Broken center line: markings move only while the car is moving.
-    if (speed > 0) {
-      final movement = progress * 0.8;
-      for (int i = 0; i < 7; i++) {
-        final t = ((i / 7.0) + movement) % 1.0;
-        final perspective = t * t;
-        final y = horizonY + (h - horizonY) * perspective;
-        final dashHeight = 2.0 + 17.0 * perspective;
-        final dashWidth = 1.0 + 3.0 * perspective;
-        final dashPaint = Paint()
-          ..color = Colors.white.withOpacity(0.22 + 0.58 * perspective)
-          ..strokeWidth = dashWidth
-          ..strokeCap = StrokeCap.round;
-        canvas.drawLine(Offset(centerX, y), Offset(centerX, (y + dashHeight).clamp(horizonY, h)), dashPaint);
-      }
+    // Realistic broken white center line with perspective scaling.
+    // The markings remain visible while stopped and flow toward the viewer while moving.
+    final movement = speed > 0 ? (progress * (0.18 + speed / 250.0)) : 0.0;
+    for (int i = 0; i < 9; i++) {
+      final t = ((i / 9.0) + movement) % 1.0;
+      final perspective = t * t;
+      final y = horizonY + (h - horizonY) * perspective;
+      final dashHeight = 2.5 + 25.0 * perspective;
+      final dashWidth = 1.0 + 4.0 * perspective;
+      final dashPaint = Paint()
+        ..color = Colors.white.withOpacity(0.42 + 0.48 * perspective)
+        ..strokeWidth = dashWidth
+        ..strokeCap = StrokeCap.round;
+      final endY = (y + dashHeight).clamp(horizonY, h).toDouble();
+      canvas.drawLine(Offset(centerX, y), Offset(centerX, endY), dashPaint);
     }
 
     // Small, restrained roadside reflectors add depth without a neon-grid look.
@@ -1006,7 +1086,8 @@ class SpeedGaugePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (size.width <= 0 || size.height <= 0) return;
-    final center = Offset(size.width / 2, size.height * 0.53);
+    // Move the gauge upward so it sits closer beneath the TIBA 2 title.
+    final center = Offset(size.width / 2, size.height * 0.43);
     final radius = math.min(size.width * 0.39, size.height * 0.42);
     final rect = Rect.fromCircle(center: center, radius: radius);
     const startAngle = 3.49; // lower-left, measured from the positive x-axis
