@@ -523,7 +523,7 @@ class _LauncherHomeState extends State<LauncherHome>
             height: 64,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
-              gradient: const LinearGradient(
+              gradient: LinearGradient(
                 colors: NeonPalette.neonRamp,
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
