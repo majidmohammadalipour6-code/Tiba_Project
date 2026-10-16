@@ -1,11 +1,10 @@
 name: tiba_project
-description: "A Cyber HUD Car Launcher for Tiba 2"
-publish_to: 'none'
-
+description: "Tiba 2 Custom Cyber HUD Launcher"
+publish_to: "none"
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
   flutter:
