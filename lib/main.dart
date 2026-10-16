@@ -17,16 +17,14 @@ class TibaLauncherApp extends StatelessWidget {
   const TibaLauncherApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Tiba 2 Launcher',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF030712),
-      ),
-      home: const LauncherHome(),
-    );
-  }
+  Widget build(BuildContext context) => MaterialApp(
+        title: 'Tiba 2 Launcher',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData.dark().copyWith(
+          scaffoldBackgroundColor: const Color(0xFF030712),
+        ),
+        home: const LauncherHome(),
+      );
 }
 
 class LauncherHome extends StatefulWidget {
@@ -43,20 +41,29 @@ class _LauncherHomeState extends State<LauncherHome>
   double _rawSpeed = 0.0;
   double _gpsMultiplier = 1.0;
   double _neonIntensity = 1.0;
+  double _roadIntensity = 1.0;
+  double _speedometerIntensity = 1.0;
   Color _neonColor = const Color(0xFF00E5FF);
+
+  static const List<MapEntry<String, Color>> _neonColors = [
+    MapEntry('فیروزه‌ای', Color(0xFF00E5FF)),
+    MapEntry('بنفش', Color(0xFFB388FF)),
+    MapEntry('قرمز', Color(0xFFFF3B5C)),
+    MapEntry('سبز', Color(0xFF39FF88)),
+    MapEntry('نارنجی', Color(0xFFFF9F1C)),
+    MapEntry('سفید یخی', Color(0xFFEAF7FF)),
+    MapEntry('صورتی', Color(0xFFFF4FD8)),
+  ];
 
   String _timeString = '';
   String _dateString = '';
   Timer? _clockTimer;
 
-  // Music Player
   final AudioPlayer _player = AudioPlayer();
   List<PlatformFile> _tracks = [];
   int _currentTrackIndex = -1;
   bool _isPlaying = false;
   String _currentTrackTitle = 'آهنگی انتخاب نشده';
-
-  // Navigation App
   String _selectedNav = 'ir.neshan.sp';
 
   late AnimationController _roadAnimCtrl;
@@ -68,7 +75,6 @@ class _LauncherHomeState extends State<LauncherHome>
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat();
-
     _setupPlatformChannel();
     _loadPreferences();
     _initClock();
@@ -81,9 +87,7 @@ class _LauncherHomeState extends State<LauncherHome>
       if (call.method == 'onSpeed') {
         final speed = (call.arguments as num).toDouble();
         if (mounted) {
-          setState(() {
-            _rawSpeed = speed < 1.0 ? 0.0 : speed;
-          });
+          setState(() => _rawSpeed = speed < 1.0 ? 0.0 : speed);
         }
       }
     });
@@ -91,14 +95,16 @@ class _LauncherHomeState extends State<LauncherHome>
 
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     setState(() {
       _gpsMultiplier = prefs.getDouble('gps_multiplier') ?? 1.0;
       _neonIntensity = prefs.getDouble('neon_intensity') ?? 1.0;
+      _roadIntensity = prefs.getDouble('road_intensity') ?? 1.0;
+      _speedometerIntensity =
+          prefs.getDouble('speedometer_intensity') ?? 1.0;
       _selectedNav = prefs.getString('selected_nav') ?? 'ir.neshan.sp';
-      int? colorVal = prefs.getInt('neon_color');
-      if (colorVal != null) {
-        _neonColor = Color(colorVal);
-      }
+      final colorVal = prefs.getInt('neon_color');
+      if (colorVal != null) _neonColor = Color(colorVal);
     });
   }
 
@@ -106,13 +112,16 @@ class _LauncherHomeState extends State<LauncherHome>
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble('gps_multiplier', _gpsMultiplier);
     await prefs.setDouble('neon_intensity', _neonIntensity);
+    await prefs.setDouble('road_intensity', _roadIntensity);
+    await prefs.setDouble('speedometer_intensity', _speedometerIntensity);
     await prefs.setString('selected_nav', _selectedNav);
     await prefs.setInt('neon_color', _neonColor.value);
   }
 
   void _initClock() {
     _updateClock();
-    _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) => _updateClock());
+    _clockTimer =
+        Timer.periodic(const Duration(seconds: 1), (_) => _updateClock());
   }
 
   void _updateClock() {
@@ -128,51 +137,40 @@ class _LauncherHomeState extends State<LauncherHome>
 
   void _initAudioPlayer() {
     _player.onPlayerStateChanged.listen((state) {
-      if (mounted) {
-        setState(() {
-          _isPlaying = state == PlayerState.playing;
-        });
-      }
+      if (mounted) setState(() => _isPlaying = state == PlayerState.playing);
     });
-    _player.onPlayerComplete.listen((_) {
-      _nextTrack();
-    });
+    _player.onPlayerComplete.listen((_) => _nextTrack());
   }
 
   Future<void> _requestAllPermissions() async {
-    await [
-      Permission.location,
-      Permission.storage,
-      Permission.audio,
-    ].request();
-
+    await [Permission.location, Permission.storage, Permission.audio].request();
     try {
       await platform.invokeMethod('open', {'action': 'request_location'});
     } catch (_) {}
   }
 
   Future<void> _pickMusicFiles() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.platform.pickFiles(
       allowMultiple: true,
       type: FileType.custom,
       allowedExtensions: ['mp3', 'wav', 'aac', 'm4a', 'flac', 'ogg'],
     );
-
     if (result != null && result.files.isNotEmpty) {
+      final selected = result.files.where((f) => f.path != null).toList();
       setState(() {
-        _tracks = result.files.where((f) => f.path != null).toList();
-        if (_tracks.isNotEmpty) {
-          _currentTrackIndex = 0;
-          _playTrack(0);
-        }
+        _tracks = selected;
+        if (_tracks.isNotEmpty) _currentTrackIndex = 0;
       });
+      if (_tracks.isNotEmpty) await _playTrack(0);
     }
   }
 
   Future<void> _playTrack(int index) async {
     if (index >= 0 && index < _tracks.length) {
       final file = _tracks[index];
+      if (file.path == null) return;
       await _player.play(DeviceFileSource(file.path!));
+      if (!mounted) return;
       setState(() {
         _currentTrackIndex = index;
         _currentTrackTitle = file.name;
@@ -190,19 +188,16 @@ class _LauncherHomeState extends State<LauncherHome>
     }
     if (_isPlaying) {
       await _player.pause();
+    } else if (_currentTrackIndex == -1) {
+      await _playTrack(0);
     } else {
-      if (_currentTrackIndex == -1 && _tracks.isNotEmpty) {
-        _playTrack(0);
-      } else {
-        await _player.resume();
-      }
+      await _player.resume();
     }
   }
 
   Future<void> _nextTrack() async {
     if (_tracks.isNotEmpty) {
-      int next = (_currentTrackIndex + 1) % _tracks.length;
-      _playTrack(next);
+      await _playTrack((_currentTrackIndex + 1) % _tracks.length);
     } else {
       try {
         await platform.invokeMethod('open', {'action': 'media_next'});
@@ -212,8 +207,9 @@ class _LauncherHomeState extends State<LauncherHome>
 
   Future<void> _prevTrack() async {
     if (_tracks.isNotEmpty) {
-      int prev = (_currentTrackIndex - 1 + _tracks.length) % _tracks.length;
-      _playTrack(prev);
+      await _playTrack(
+        (_currentTrackIndex - 1 + _tracks.length) % _tracks.length,
+      );
     } else {
       try {
         await platform.invokeMethod('open', {'action': 'media_prev'});
@@ -230,105 +226,250 @@ class _LauncherHomeState extends State<LauncherHome>
   void _openSettingsDialog() {
     showDialog(
       context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setDlgState) {
-            return AlertDialog(
-              backgroundColor: const Color(0xFF0F172A),
-              shape: RoundedRectangleBorder(
-                side: BorderSide(color: _neonColor, width: 1.5),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              title: Text(
-                'تنظیمات لانچر تیبا ۲',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: _neonColor, fontWeight: FontWeight.bold),
-              ),
-              content: SingleChildScrollView(
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDlgState) => AlertDialog(
+          backgroundColor: const Color(0xFF0F172A),
+          shape: RoundedRectangleBorder(
+            side: BorderSide(color: _neonColor, width: 1.5),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(
+            'تنظیمات اصلی لانچر تیبا ۲',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: _neonColor, fontWeight: FontWeight.bold),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: Icon(Icons.settings_suggest, color: _neonColor),
+                  title: const Text('تنظیمات اصلی تبلت / اندروید',
+                      style: TextStyle(color: Colors.white)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _launchIntent('settings');
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.gps_fixed, color: _neonColor),
+                  title: const Text('تنظیمات موقعیت مکانی (GPS)',
+                      style: TextStyle(color: Colors.white)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _launchIntent('location_settings');
+                  },
+                ),
+                const Divider(color: Colors.white24),
+                Text(
+                  'کالیبراسیون ضریب سرعت: ${_gpsMultiplier.toStringAsFixed(2)}',
+                  style: const TextStyle(color: Colors.white70),
+                ),
+                Slider(
+                  value: _gpsMultiplier,
+                  min: 0.7,
+                  max: 1.3,
+                  divisions: 12,
+                  activeColor: _neonColor,
+                  onChanged: (value) {
+                    setDlgState(() => _gpsMultiplier = value);
+                    setState(() => _gpsMultiplier = value);
+                    _savePreferences();
+                  },
+                ),
+                const Divider(color: Colors.white24),
+                const Text('مسیریاب پیش‌فرض',
+                    style: TextStyle(color: Colors.white70)),
+                DropdownButton<String>(
+                  value: _selectedNav,
+                  dropdownColor: const Color(0xFF1E293B),
+                  style: const TextStyle(color: Colors.white),
+                  items: const [
+                    DropdownMenuItem(
+                        value: 'ir.neshan.sp', child: Text('نشان')),
+                    DropdownMenuItem(
+                        value: 'ir.balad.navigation', child: Text('بلد')),
+                    DropdownMenuItem(
+                        value: 'com.google.android.apps.maps',
+                        child: Text('گوگل مپ')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setDlgState(() => _selectedNav = value);
+                      setState(() => _selectedNav = value);
+                      _savePreferences();
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('بستن', style: TextStyle(color: _neonColor)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openNeonSettings() {
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (dialogContext, setDlgState) {
+          void updateSetting(VoidCallback update) {
+            setState(update);
+            setDlgState(() {});
+            _savePreferences();
+          }
+
+          Widget intensityControl({
+            required String title,
+            required double value,
+            required double min,
+            required double max,
+            required ValueChanged<double> onChanged,
+          }) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(title,
+                          style: const TextStyle(color: Colors.white70)),
+                    ),
+                    Text('${(value * 100).round()}%',
+                        style: TextStyle(
+                            color: _neonColor, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                Slider(
+                  value: value.clamp(min, max).toDouble(),
+                  min: min,
+                  max: max,
+                  activeColor: _neonColor,
+                  inactiveColor: _neonColor.withOpacity(0.18),
+                  onChanged: onChanged,
+                ),
+              ],
+            );
+          }
+
+          return AlertDialog(
+            backgroundColor: const Color(0xFF0F172A),
+            shape: RoundedRectangleBorder(
+              side: BorderSide(color: _neonColor, width: 1.5),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            title: Text(
+              'تنظیم رنگ و نور نئون',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: _neonColor, fontWeight: FontWeight.bold),
+            ),
+            content: SizedBox(
+              width: 420,
+              child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    ListTile(
-                      leading: Icon(Icons.settings_suggest, color: _neonColor),
-                      title: const Text('تنظیمات اصلی تبلت / اندروید', style: TextStyle(color: Colors.white)),
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        _launchIntent('settings');
-                      },
+                    const Text('انتخاب رنگ',
+                        style: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: _neonColors.map((entry) {
+                        final selected =
+                            _neonColor.value == entry.value.value;
+                        return Tooltip(
+                          message: entry.key,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(30),
+                            onTap: () => updateSetting(
+                                () => _neonColor = entry.value),
+                            child: Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: entry.value,
+                                boxShadow: [
+                                  if (selected)
+                                    BoxShadow(
+                                      color: entry.value.withOpacity(0.7),
+                                      blurRadius: 14,
+                                      spreadRadius: 2,
+                                    ),
+                                ],
+                                border: Border.all(
+                                  color: selected
+                                      ? Colors.white
+                                      : Colors.white30,
+                                  width: selected ? 3 : 1,
+                                ),
+                              ),
+                              child: selected
+                                  ? const Icon(Icons.check,
+                                      color: Colors.black, size: 21)
+                                  : null,
+                            ),
+                          ),
+                        );
+                      }).toList(),
                     ),
-                    ListTile(
-                      leading: Icon(Icons.gps_fixed, color: _neonColor),
-                      title: const Text('تنظیمات موقعیت مکانی (GPS)', style: TextStyle(color: Colors.white)),
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        _launchIntent('location_settings');
-                      },
-                    ),
+                    const SizedBox(height: 18),
                     const Divider(color: Colors.white24),
-                    Text(
-                      'کالیبراسیون و ضریب سرعت: ${_gpsMultiplier.toStringAsFixed(2)}',
-                      style: const TextStyle(color: Colors.white70),
-                    ),
-                    Slider(
-                      value: _gpsMultiplier,
-                      min: 0.7,
-                      max: 1.3,
-                      divisions: 12,
-                      activeColor: _neonColor,
-                      onChanged: (val) {
-                        setDlgState(() => _gpsMultiplier = val);
-                        setState(() => _gpsMultiplier = val);
-                        _savePreferences();
-                      },
-                    ),
-                    const Divider(color: Colors.white24),
-                    Text(
-                      'شدت نور نئون: ${(_neonIntensity * 100).toInt()}%',
-                      style: const TextStyle(color: Colors.white70),
-                    ),
-                    Slider(
+                    intensityControl(
+                      title: 'شدت نور کلی',
                       value: _neonIntensity,
                       min: 0.3,
                       max: 1.5,
-                      activeColor: _neonColor,
-                      onChanged: (val) {
-                        setDlgState(() => _neonIntensity = val);
-                        setState(() => _neonIntensity = val);
-                        _savePreferences();
-                      },
+                      onChanged: (value) => updateSetting(
+                          () => _neonIntensity = value),
                     ),
-                    const Divider(color: Colors.white24),
-                    const Text('مسیریاب پیش‌فرض', style: TextStyle(color: Colors.white70)),
-                    DropdownButton<String>(
-                      value: _selectedNav,
-                      dropdownColor: const Color(0xFF1E293B),
-                      style: const TextStyle(color: Colors.white),
-                      items: const [
-                        DropdownMenuItem(value: 'ir.neshan.sp', child: Text('نشان')),
-                        DropdownMenuItem(value: 'ir.balad.navigation', child: Text('بلد')),
-                        DropdownMenuItem(value: 'com.google.android.apps.maps', child: Text('گوگل مپ')),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) {
-                          setDlgState(() => _selectedNav = val);
-                          setState(() => _selectedNav = val);
-                          _savePreferences();
-                        }
-                      },
+                    intensityControl(
+                      title: 'شدت نور جاده متحرک',
+                      value: _roadIntensity,
+                      min: 0.1,
+                      max: 1.5,
+                      onChanged: (value) =>
+                          updateSetting(() => _roadIntensity = value),
+                    ),
+                    intensityControl(
+                      title: 'شدت نور سرعت‌سنج',
+                      value: _speedometerIntensity,
+                      min: 0.1,
+                      max: 1.5,
+                      onChanged: (value) => updateSetting(
+                          () => _speedometerIntensity = value),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'تغییرات به‌صورت خودکار ذخیره می‌شوند.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          color: Colors.white.withOpacity(0.55), fontSize: 12),
                     ),
                   ],
                 ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: Text('بستن', style: TextStyle(color: _neonColor)),
-                ),
-              ],
-            );
-          },
-        );
-      },
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('بستن', style: TextStyle(color: _neonColor)),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -343,7 +484,6 @@ class _LauncherHomeState extends State<LauncherHome>
   @override
   Widget build(BuildContext context) {
     final speed = (_rawSpeed * _gpsMultiplier).round();
-
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -356,32 +496,28 @@ class _LauncherHomeState extends State<LauncherHome>
         child: SafeArea(
           child: Row(
             children: [
-              // 1. سایدبار ناوبری و دکمه‌ها (سمت چپ)
               _buildSidebar(),
-
-              // 2. ستون سمت چپ: کارت مسیریاب
               Expanded(
                 flex: 4,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 8.0),
+                  padding: const EdgeInsets.symmetric(
+                      vertical: 12, horizontal: 8),
                   child: _buildNavCard(),
                 ),
               ),
-
-              // 3. ستون وسط: هدر تیبا ۲ + سرعت‌سنج + جاده متحرک + آرم سایپا + نمای پشت تیبا + پلیر
               Expanded(
                 flex: 6,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 8.0),
+                  padding: const EdgeInsets.symmetric(
+                      vertical: 12, horizontal: 8),
                   child: _buildCenterDashboard(speed),
                 ),
               ),
-
-              // 4. ستون سمت راست: تصویر اصلی ماشین و دکمه‌های کنترلی
               Expanded(
                 flex: 4,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 8.0),
+                  padding: const EdgeInsets.symmetric(
+                      vertical: 12, horizontal: 8),
                   child: _buildRightCarPanel(),
                 ),
               ),
@@ -395,38 +531,49 @@ class _LauncherHomeState extends State<LauncherHome>
   Widget _buildSidebar() {
     return Container(
       width: 72,
-      margin: const EdgeInsets.all(8.0),
+      margin: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: const Color(0xFF0A0F1D).withOpacity(0.85),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _neonColor.withOpacity(0.35 * _neonIntensity)),
+        border: Border.all(
+            color: _neonColor.withOpacity(0.35 * _neonIntensity)),
         boxShadow: [
           BoxShadow(
-            color: _neonColor.withOpacity(0.15 * _neonIntensity),
-            blurRadius: 10,
-          )
+              color: _neonColor.withOpacity(0.15 * _neonIntensity),
+              blurRadius: 10),
         ],
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           IconButton(
+            tooltip: 'تنظیمات اصلی',
             icon: Icon(Icons.settings, color: _neonColor, size: 28),
             onPressed: _openSettingsDialog,
           ),
           IconButton(
-            icon: const Icon(Icons.navigation_outlined, color: Colors.white70, size: 28),
+            tooltip: 'تنظیم رنگ و نور',
+            icon: Icon(Icons.palette_outlined, color: _neonColor, size: 27),
+            onPressed: _openNeonSettings,
+          ),
+          IconButton(
+            tooltip: 'مسیریاب',
+            icon: const Icon(Icons.navigation_outlined,
+                color: Colors.white70, size: 28),
             onPressed: () => _launchIntent('nav', pkg: _selectedNav),
           ),
           IconButton(
+            tooltip: 'رادیو',
             icon: const Icon(Icons.radio, color: Colors.white70, size: 28),
             onPressed: () => _launchIntent('radio'),
           ),
           IconButton(
+            tooltip: 'تلفن',
             icon: const Icon(Icons.phone, color: Colors.white70, size: 28),
             onPressed: () => _launchIntent('phone'),
           ),
           IconButton(
+            tooltip: 'برنامه‌ها',
             icon: const Icon(Icons.apps, color: Colors.white70, size: 28),
             onPressed: () => _launchIntent('apps'),
           ),
@@ -440,7 +587,8 @@ class _LauncherHomeState extends State<LauncherHome>
       decoration: BoxDecoration(
         color: const Color(0xFF0A0F1D).withOpacity(0.7),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _neonColor.withOpacity(0.3 * _neonIntensity)),
+        border: Border.all(
+            color: _neonColor.withOpacity(0.3 * _neonIntensity)),
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -456,42 +604,44 @@ class _LauncherHomeState extends State<LauncherHome>
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
                   shadows: [
-                    Shadow(color: _neonColor, blurRadius: 10 * _neonIntensity)
+                    Shadow(
+                        color: _neonColor,
+                        blurRadius: 10 * _neonIntensity),
                   ],
                 ),
               ),
-              Text(
-                _dateString,
-                style: const TextStyle(color: Colors.white54, fontSize: 14),
-              ),
+              Text(_dateString,
+                  style: const TextStyle(
+                      color: Colors.white54, fontSize: 14)),
             ],
           ),
           const Spacer(),
           Center(
-            child: Icon(
-              Icons.explore_outlined,
-              size: 70,
-              color: _neonColor.withOpacity(0.8),
-            ),
+            child: Icon(Icons.explore_outlined,
+                size: 70,
+                color: _neonColor.withOpacity(0.8 * _neonIntensity)),
           ),
           const SizedBox(height: 12),
           const Center(
-            child: Text(
-              'سیستم مسیریابی هوشمند',
-              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-            ),
+            child: Text('سیستم مسیریابی هوشمند',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold)),
           ),
           const Spacer(),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
               backgroundColor: _neonColor.withOpacity(0.2),
               side: BorderSide(color: _neonColor),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
             onPressed: () => _launchIntent('nav', pkg: _selectedNav),
             icon: const Icon(Icons.near_me, color: Colors.white),
-            label: const Text('شروع مسیریابی', style: TextStyle(color: Colors.white, fontSize: 15)),
+            label: const Text('شروع مسیریابی',
+                style: TextStyle(color: Colors.white, fontSize: 15)),
           ),
         ],
       ),
@@ -501,7 +651,6 @@ class _LauncherHomeState extends State<LauncherHome>
   Widget _buildCenterDashboard(int speed) {
     return Column(
       children: [
-        // عنوان تیبا ۲
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -513,39 +662,39 @@ class _LauncherHomeState extends State<LauncherHome>
                 letterSpacing: 4,
                 fontWeight: FontWeight.w900,
                 shadows: [
-                  Shadow(color: _neonColor, blurRadius: 15 * _neonIntensity),
+                  Shadow(
+                      color: _neonColor.withOpacity(_neonIntensity),
+                      blurRadius: 15 * _neonIntensity),
                 ],
               ),
             ),
             const SizedBox(width: 8),
-            const Text(
-              'تیبا ۲',
-              style: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.bold),
-            ),
+            const Text('تیبا ۲',
+                style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold)),
           ],
         ),
         const SizedBox(height: 4),
-
-        // کیلومترشمار نئونی، سرعت زنده، آرم سایپا و نمای پشت تیبا
         Expanded(
           child: Stack(
             alignment: Alignment.center,
             children: [
-              // جاده سه‌بعدی نئونی
               AnimatedBuilder(
                 animation: _roadAnimCtrl,
-                builder: (context, child) {
-                  return CustomPaint(
-                    size: const Size(double.infinity, double.infinity),
-                    painter: RoadPainter(
-                      progress: _roadAnimCtrl.value,
-                      color: _neonColor.withOpacity(0.4 * _neonIntensity),
+                builder: (context, child) => CustomPaint(
+                  size: const Size(double.infinity, double.infinity),
+                  painter: RoadPainter(
+                    progress: _roadAnimCtrl.value,
+                    color: _neonColor.withOpacity(
+                      (0.4 * _neonIntensity * _roadIntensity)
+                          .clamp(0.0, 1.0)
+                          .toDouble(),
                     ),
-                  );
-                },
+                  ),
+                ),
               ),
-
-              // سرعت‌سنج مرکزی
               Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -556,54 +705,55 @@ class _LauncherHomeState extends State<LauncherHome>
                       fontSize: 68,
                       fontWeight: FontWeight.w900,
                       shadows: [
-                        Shadow(color: _neonColor, blurRadius: 20 * _neonIntensity),
+                        Shadow(
+                          color: _neonColor.withOpacity(
+                            _speedometerIntensity
+                                .clamp(0.0, 1.0)
+                                .toDouble(),
+                          ),
+                          blurRadius:
+                              20 * _neonIntensity * _speedometerIntensity,
+                        ),
                       ],
                     ),
                   ),
                   Text(
                     'KM / H',
                     style: TextStyle(
-                      color: _neonColor,
+                      color: _neonColor.withOpacity(
+                          _speedometerIntensity.clamp(0.0, 1.0).toDouble()),
                       fontSize: 14,
                       letterSpacing: 2,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 8),
-
-                  // آرم سایپا
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
                     decoration: BoxDecoration(
-                      border: Border.all(color: _neonColor.withOpacity(0.5)),
+                      border: Border.all(
+                          color: _neonColor.withOpacity(0.5 * _neonIntensity)),
                       borderRadius: BorderRadius.circular(10),
                       color: Colors.black.withOpacity(0.4),
                     ),
-                    child: Text(
-                      'SAIPA • سایپا',
-                      style: TextStyle(
-                        color: _neonColor,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.5,
-                      ),
-                    ),
+                    child: Text('SAIPA • سایپا',
+                        style: TextStyle(
+                          color: _neonColor,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.5,
+                        )),
                   ),
                   const SizedBox(height: 6),
-
-                  // نمای پشت ماشین تیبا ۲
-                  Image.asset(
-                    'tiba2_rear.png',
-                    height: 52,
-                    errorBuilder: (_, __, ___) => const SizedBox(height: 52),
-                  ),
+                  Image.asset('tiba2_rear.png',
+                      height: 52,
+                      errorBuilder: (_, __, ___) => const SizedBox(height: 52)),
                 ],
               ),
             ],
           ),
         ),
-
-        // پلیر صوتی پایین ستون وسط
         _buildBottomPlayerBar(),
       ],
     );
@@ -615,7 +765,8 @@ class _LauncherHomeState extends State<LauncherHome>
       decoration: BoxDecoration(
         color: const Color(0xFF0A0F1D).withOpacity(0.85),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _neonColor.withOpacity(0.3 * _neonIntensity)),
+        border: Border.all(
+            color: _neonColor.withOpacity(0.3 * _neonIntensity)),
       ),
       child: Row(
         children: [
@@ -624,32 +775,36 @@ class _LauncherHomeState extends State<LauncherHome>
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
+                Text(_currentTrackTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold)),
                 Text(
-                  _currentTrackTitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  _tracks.isEmpty ? 'پلیر چندرسانه‌ای' : 'تعداد ترک‌ها: ${_tracks.length}',
-                  style: const TextStyle(color: Colors.white54, fontSize: 11),
-                ),
+                    _tracks.isEmpty
+                        ? 'پلیر چندرسانه‌ای'
+                        : 'تعداد ترک‌ها: ${_tracks.length}',
+                    style: const TextStyle(
+                        color: Colors.white54, fontSize: 11)),
               ],
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.skip_previous, color: Colors.white),
-            onPressed: _prevTrack,
-          ),
+              icon: const Icon(Icons.skip_previous, color: Colors.white),
+              onPressed: _prevTrack),
           IconButton(
-            icon: Icon(_isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
-                color: _neonColor, size: 36),
-            onPressed: _togglePlayPause,
-          ),
+              icon: Icon(
+                  _isPlaying
+                      ? Icons.pause_circle_filled
+                      : Icons.play_circle_filled,
+                  color: _neonColor,
+                  size: 36),
+              onPressed: _togglePlayPause),
           IconButton(
-            icon: const Icon(Icons.skip_next, color: Colors.white),
-            onPressed: _nextTrack,
-          ),
+              icon: const Icon(Icons.skip_next, color: Colors.white),
+              onPressed: _nextTrack),
         ],
       ),
     );
@@ -660,7 +815,8 @@ class _LauncherHomeState extends State<LauncherHome>
       decoration: BoxDecoration(
         color: const Color(0xFF0A0F1D).withOpacity(0.7),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _neonColor.withOpacity(0.3 * _neonIntensity)),
+        border: Border.all(
+            color: _neonColor.withOpacity(0.3 * _neonIntensity)),
       ),
       padding: const EdgeInsets.all(12),
       child: Column(
@@ -669,20 +825,23 @@ class _LauncherHomeState extends State<LauncherHome>
             style: ElevatedButton.styleFrom(
               backgroundColor: _neonColor.withOpacity(0.15),
               side: BorderSide(color: _neonColor),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               minimumSize: const Size(double.infinity, 44),
             ),
             onPressed: _pickMusicFiles,
             icon: const Icon(Icons.folder_open, color: Colors.white),
-            label: const Text('پوشه موزیک / فلش', style: TextStyle(color: Colors.white, fontSize: 13)),
+            label: const Text('پوشه موزیک / فلش',
+                style: TextStyle(color: Colors.white, fontSize: 13)),
           ),
           const Spacer(),
-          // تصویر اصلی تیبا ۲
           Image.asset(
             'tiba2.png',
             fit: BoxFit.contain,
             errorBuilder: (_, __, ___) => Center(
-              child: Icon(Icons.directions_car, size: 90, color: _neonColor.withOpacity(0.5)),
+              child: Icon(Icons.directions_car,
+                  size: 90,
+                  color: _neonColor.withOpacity(0.5 * _neonIntensity)),
             ),
           ),
           const Spacer(),
@@ -694,8 +853,14 @@ class _LauncherHomeState extends State<LauncherHome>
                 onPressed: () => _launchIntent('music'),
               ),
               IconButton(
+                tooltip: 'تنظیمات اصلی',
                 icon: const Icon(Icons.tune, color: Colors.white70),
                 onPressed: _openSettingsDialog,
+              ),
+              IconButton(
+                tooltip: 'رنگ و نور',
+                icon: Icon(Icons.palette_outlined, color: _neonColor),
+                onPressed: _openNeonSettings,
               ),
             ],
           ),
@@ -722,20 +887,19 @@ class RoadPainter extends CustomPainter {
     final pBottomLeft = Offset(size.width * 0.1, size.height);
     final pBottomRight = Offset(size.width * 0.9, size.height);
 
-    // خطوط کناری جاده
     canvas.drawLine(pTop, pBottomLeft, paint);
     canvas.drawLine(pTop, pBottomRight, paint);
 
-    // خطوط افقی متحرک
     for (int i = 0; i < 5; i++) {
-      double t = (progress + (i / 5.0)) % 1.0;
-      double y = pTop.dy + (size.height - pTop.dy) * (t * t);
-      double x1 = pTop.dx - (pTop.dx - pBottomLeft.dx) * t;
-      double x2 = pTop.dx + (pBottomRight.dx - pTop.dx) * t;
+      final t = (progress + (i / 5.0)) % 1.0;
+      final y = pTop.dy + (size.height - pTop.dy) * (t * t);
+      final x1 = pTop.dx - (pTop.dx - pBottomLeft.dx) * t;
+      final x2 = pTop.dx + (pBottomRight.dx - pTop.dx) * t;
       canvas.drawLine(Offset(x1, y), Offset(x2, y), paint);
     }
   }
 
   @override
-  bool shouldRepaint(covariant RoadPainter oldDelegate) => true;
+  bool shouldRepaint(covariant RoadPainter oldDelegate) =>
+      oldDelegate.progress != progress || oldDelegate.color != color;
 }
