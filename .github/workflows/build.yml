@@ -41,16 +41,6 @@ jobs:
             cp ../tiba2_rear.png ./
           fi
 
-      - name: Configure Android SDK & Gradle
-        run: |
-          cd tiba_project
-          APP_GRADLE="android/app/build.gradle"
-          # تنظیم صریح نسخه کامپایل به 35 برای سازگاری با geolocator و audioplayers
-          sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/' "$APP_GRADLE" || true
-          sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 35/' "$APP_GRADLE" || true
-          sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 35/' "$APP_GRADLE" || true
-          sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 35/' "$APP_GRADLE" || true
-
       - name: Configure Android Manifest
         run: |
           cd tiba_project
