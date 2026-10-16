@@ -41,17 +41,35 @@ jobs:
             cp ../tiba2_rear.png ./
           fi
 
-      - name: Configure Kotlin and Android Settings
+      - name: Force Kotlin Version Globally
         run: |
           cd tiba_project
-
-          # ارتقای نسخه کاتلین برای سازگاری کامل با پکیج‌ها
+          
+          # اعمال نسخه کاتلین 1.9.22 برای تمامی ساب‌پروژه‌ها و افزونه‌ها در سطح گرادل ریشه
           BUILD_GRADLE="android/build.gradle"
-          sed -i "s/ext.kotlin_version = .*/ext.kotlin_version = '1.9.22'/" "$BUILD_GRADLE" || true
+          if [ -f "$BUILD_GRADLE" ]; then
+            echo "
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              configurations.all {
+                  resolutionStrategy.eachDependency { details ->
+                      if (details.requested.group == 'org.jetbrains.kotlin') {
+                          details.useVersion '1.9.22'
+                      }
+                  }
+              }
+          }
+          " >> "$BUILD_GRADLE"
+          fi
 
-          APP_GRADLE="android/app/build.gradle"
-          sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 34/' "$APP_GRADLE" || true
-          sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 34/' "$APP_GRADLE" || true
+          # اصلاح در settings.gradle
+          SETTINGS="android/settings.gradle"
+          if [ -f "$SETTINGS" ]; then
+            sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.22"/' "$SETTINGS" || true
+          fi
 
       - name: Configure Android Manifest
         run: |
