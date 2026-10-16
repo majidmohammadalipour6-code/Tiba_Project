@@ -134,7 +134,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   const SizedBox(height: 10),
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.cyan.withValues(alpha: 0.2),
+                      backgroundColor: Colors.cyan.withOpacity(0.2),
                       side: const BorderSide(color: Colors.cyanAccent),
                     ),
                     onPressed: () {
@@ -204,14 +204,14 @@ class _DashboardScreenState extends State<DashboardScreen>
       body: SafeArea(
         child: Row(
           children: [
-            // ۱. سایدبار داک سمت چپ (کاملاً ضد کشیدگی و ریسپانسیو)
+            // ۱. سایدبار داک سمت چپ (ضد کشیدگی با AspectRatio قفل‌شده)
             Container(
               width: dockWidth,
               decoration: BoxDecoration(
-                color: const Color(0xFF0B111E).withValues(alpha: 0.95),
+                color: const Color(0xFF0B111E).withOpacity(0.95),
                 border: Border(
                   right: BorderSide(
-                    color: Colors.cyanAccent.withValues(alpha: 0.3),
+                    color: Colors.cyanAccent.withOpacity(0.3),
                     width: 1.5,
                   ),
                 ),
@@ -248,7 +248,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
             ),
 
-            // ۲. صفحه اصلی (داشبورد ۳ ستونه متناسب)
+            // ۲. صفحه اصلی (داشبورد ۳ ستونه)
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -268,7 +268,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     ),
                     const SizedBox(width: 10),
 
-                    // کارت موزیک و تصویر زیبای خودرو تیبا ۲ سمت راست
+                    // کارت موزیک و تصویر خودرو تیبا ۲ سمت راست
                     Expanded(
                       flex: 3,
                       child: _buildRightCard(),
@@ -283,7 +283,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  // ویجت دکمه‌های داک با قفل AspectRatio جهت جلوگیری از کشیدگی
+  // ویجت دکمه‌های داک با نسبت ابعاد دقیق ۱:۱
   Widget _buildDockIconButton({
     required IconData icon,
     required String tooltip,
@@ -302,14 +302,14 @@ class _DashboardScreenState extends State<DashboardScreen>
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: Colors.cyanAccent.withValues(alpha: 0.2),
+                  color: Colors.cyanAccent.withOpacity(0.2),
                   width: 1.2,
                 ),
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    Colors.cyanAccent.withValues(alpha: 0.15),
+                    Colors.cyanAccent.withOpacity(0.15),
                     Colors.transparent,
                   ],
                 ),
@@ -332,10 +332,10 @@ class _DashboardScreenState extends State<DashboardScreen>
   Widget _buildLeftCard() {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A).withValues(alpha: 0.8),
+        color: const Color(0xFF0F172A).withOpacity(0.8),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Colors.cyanAccent.withValues(alpha: 0.25),
+          color: Colors.cyanAccent.withOpacity(0.25),
         ),
       ),
       child: Column(
@@ -351,7 +351,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.4)),
+                      border: Border.all(color: Colors.cyanAccent.withOpacity(0.4)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -412,18 +412,18 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  // پنل مرکزی: کیلومتر نیم‌دایره نئونی واقعی (۱۰ تا ۱۳۰) با هاله نوری + جاده طبیعی ۳ بعدی
+  // پنل مرکزی: کیلومتر نیم‌دایره نئونی واقعی (۱۰ تا ۱۳۰) + هاله نوری + جاده ۳ بعدی
   Widget _buildCenterGaugeRoad() {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF0B101D).withValues(alpha: 0.9),
+        color: const Color(0xFF0B101D).withOpacity(0.9),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.3)),
+        border: Border.all(color: Colors.cyanAccent.withOpacity(0.3)),
       ),
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // لایه ۱: جاده پرسپکتیو ۳ بعدی و طبیعی در نیمه پایین
+          // لایه ۱: جاده پرسپکتیو ۳ بعدی در نیمه پایین
           Positioned(
             bottom: 0,
             left: 0,
@@ -466,7 +466,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               decoration: BoxDecoration(
                 color: Colors.black54,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.4)),
+                border: Border.all(color: Colors.cyanAccent.withOpacity(0.4)),
               ),
               child: const Text(
                 'SAIPA',
@@ -480,7 +480,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
           ),
 
-          // لایه ۴: سرعت‌سنج نیم‌دایره نئونی (۱۰ تا ۱۳۰) به همراه هاله نوری درخشان
+          // لایه ۴: سرعت‌سنج نیم‌دایره نئونی (۱۰ تا ۱۳۰) با هاله نوری درخشان
           Positioned(
             top: 10,
             left: 0,
@@ -495,7 +495,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // عدد سرعت با Glow نئونی عمیق و چندلایه
+                        // عدد سرعت با Glow نئونی عمیق
                         Text(
                           _speed.toInt().toString(),
                           style: TextStyle(
@@ -505,11 +505,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                             color: Colors.white,
                             shadows: [
                               Shadow(
-                                color: Colors.cyanAccent.withValues(alpha: 0.9),
+                                color: Colors.cyanAccent.withOpacity(0.9),
                                 blurRadius: 18,
                               ),
                               Shadow(
-                                color: Colors.cyanAccent.withValues(alpha: 0.6),
+                                color: Colors.cyanAccent.withOpacity(0.6),
                                 blurRadius: 36,
                               ),
                               const Shadow(
@@ -536,7 +536,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
           ),
 
-          // دکمه کالیبراسیون و وضعیت جی‌پی‌اس در گوشه بالا
+          // دکمه کالیبراسیون و وضعیت GPS در گوشه بالا
           Positioned(
             top: 8,
             left: 8,
@@ -575,8 +575,8 @@ class _DashboardScreenState extends State<DashboardScreen>
           fontSize: 13,
           fontWeight: FontWeight.bold,
           shadows: active
-              ? [
-                  const Shadow(
+              ? const [
+                  Shadow(
                     color: Colors.cyanAccent,
                     blurRadius: 10,
                   )
@@ -591,10 +591,10 @@ class _DashboardScreenState extends State<DashboardScreen>
   Widget _buildRightCard() {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A).withValues(alpha: 0.8),
+        color: const Color(0xFF0F172A).withOpacity(0.8),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Colors.cyanAccent.withValues(alpha: 0.25),
+          color: Colors.cyanAccent.withOpacity(0.25),
         ),
       ),
       child: Column(
@@ -624,7 +624,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
           ),
           const Divider(color: Colors.white12, height: 1),
-          // تصویر اصلی تیبا ۲ (BoxFit.contain بدون دفرمه شدن)
+          // تصویر اصلی تیبا ۲
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(12),
@@ -647,7 +647,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 }
 
 // ---------------------------------------------------------------------------
-// نقاش سرعت‌سنج نیم‌دایره نئونی با اعداد ۱۰ تا ۱۳۰ مشابه کیلومتر پشت‌آمپر
+// نقاش سرعت‌سنج نیم‌دایره نئونی با اعداد ۱۰ تا ۱۳۰
 // ---------------------------------------------------------------------------
 class SemiCircleSpeedometerPainter extends CustomPainter {
   final double speed;
@@ -659,10 +659,10 @@ class SemiCircleSpeedometerPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height * 0.95);
     final radius = math.min(size.width * 0.42, 110.0);
 
-    const startAngle = math.pi; // از ۱۸۰ درجه سمت چپ
-    const sweepAngle = math.pi; // نیم‌دایره تا ۰ درجه سمت راست
+    const startAngle = math.pi;
+    const sweepAngle = math.pi;
 
-    // ۱. کمان پس‌زمینه
+    // کمان پس‌زمینه
     final bgPaint = Paint()
       ..color = Colors.white12
       ..style = PaintingStyle.stroke
@@ -675,7 +675,7 @@ class SemiCircleSpeedometerPainter extends CustomPainter {
       bgPaint,
     );
 
-    // ۲. کمان پیشرفت سرعت به رنگ نئون با درخشش
+    // کمان پیشرفت سرعت به رنگ نئون
     final progress = (speed / 130.0).clamp(0.0, 1.0);
     final activePaint = Paint()
       ..color = Colors.cyanAccent
@@ -692,8 +692,8 @@ class SemiCircleSpeedometerPainter extends CustomPainter {
       activePaint,
     );
 
-    // ۳. رسم تیک‌ها و اعداد ۱۰ تا ۱۳۰ دور کیلومتر
-    const totalDivisions = 13; // گام‌های ۱۰ تایی از ۰ تا ۱۳۰
+    // تیک‌ها و اعداد ۱۰ تا ۱۳۰ دور کیلومتر
+    const totalDivisions = 13;
     for (int i = 0; i <= totalDivisions; i++) {
       final angle = startAngle + (sweepAngle * (i / totalDivisions));
       final isMajor = i % 2 != 0 || i == 0 || i == totalDivisions;
@@ -716,7 +716,7 @@ class SemiCircleSpeedometerPainter extends CustomPainter {
 
       canvas.drawLine(p1, p2, tickPaint);
 
-      // رسم ارقام دور کیلومتر (فقط گام‌های مشخص مثل ۱۰, ۲۰, ۳۰, ... ۱۳۰)
+      // رسم اعداد ۱۰، ۲۰، ۳۰ ... ۱۳۰
       if (i > 0) {
         final textRadius = radius - 18;
         final textOffset = Offset(
@@ -756,7 +756,7 @@ class SemiCircleSpeedometerPainter extends CustomPainter {
 }
 
 // ---------------------------------------------------------------------------
-// نقاش جاده نئونی طبیعی‌تر با پرسپکتیو ۳ بعدی
+// نقاش جاده نئونی طبیعی با پرسپکتیو ۳ بعدی
 // ---------------------------------------------------------------------------
 class RealisticCyberRoadPainter extends CustomPainter {
   final double progress;
@@ -768,12 +768,11 @@ class RealisticCyberRoadPainter extends CustomPainter {
     final w = size.width;
     final h = size.height;
 
-    // محو شدن جاده در انتهای دور
     final horizonY = h * 0.1;
     final topRoadW = w * 0.18;
     final bottomRoadW = w * 0.95;
 
-    // ۱. سطح آسفالت گرادیانی با افکت تاریکی شب
+    // سطح آسفالت گرادیانی
     final roadPath = Path()
       ..moveTo(w / 2 - topRoadW / 2, horizonY)
       ..lineTo(w / 2 + topRoadW / 2, horizonY)
@@ -785,8 +784,8 @@ class RealisticCyberRoadPainter extends CustomPainter {
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
       colors: [
-        Colors.black.withValues(alpha: 0.1),
-        const Color(0xFF030D1A).withValues(alpha: 0.8),
+        Colors.black.withOpacity(0.1),
+        const Color(0xFF030D1A).withOpacity(0.8),
       ],
     );
 
@@ -797,30 +796,27 @@ class RealisticCyberRoadPainter extends CustomPainter {
         ..style = PaintingStyle.fill,
     );
 
-    // ۲. خطوط مرزی کناری جاده نئونی
+    // خطوط مرزی کناری
     final borderPaint = Paint()
-      ..color = Colors.cyanAccent.withValues(alpha: 0.6)
+      ..color = Colors.cyanAccent.withOpacity(0.6)
       ..strokeWidth = 2.5
       ..maskFilter = const MaskFilter.blur(BlurStyle.solid, 4);
 
-    // خط حاشیه چپ
     canvas.drawLine(
       Offset(w / 2 - topRoadW / 2, horizonY),
       Offset(w / 2 - bottomRoadW / 2, h),
       borderPaint,
     );
-    // خط حاشیه راست
     canvas.drawLine(
       Offset(w / 2 + topRoadW / 2, horizonY),
       Offset(w / 2 + bottomRoadW / 2, h),
       borderPaint,
     );
 
-    // ۳. خط‌کشی‌های منقطع وسط با پرسپکتیو ۳ بعدی
+    // خطوط منقطع وسط جاده
     const dashCount = 6;
     for (int i = 0; i < dashCount; i++) {
       double t = (i / dashCount + progress) % 1.0;
-      // تابع توان دوم برای ایجاد فاصله بیشتر در نزدیکی (پرسپکتیو)
       double perspectiveT = math.pow(t, 2.2).toDouble();
 
       double y = horizonY + (h - horizonY) * perspectiveT;
@@ -829,7 +825,7 @@ class RealisticCyberRoadPainter extends CustomPainter {
       double alpha = (0.2 + (0.8 * perspectiveT)).clamp(0.0, 1.0);
 
       final dashPaint = Paint()
-        ..color = Colors.cyanAccent.withValues(alpha: alpha)
+        ..color = Colors.cyanAccent.withOpacity(alpha)
         ..strokeWidth = dashW
         ..strokeCap = StrokeCap.round
         ..maskFilter = const MaskFilter.blur(BlurStyle.solid, 2);
