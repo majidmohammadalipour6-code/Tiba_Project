@@ -479,7 +479,7 @@ jobs:
       - name: Build APK
         run: |
           cd tiba_project
-          flutter build apk --release --no-tree-shake-icons
+         flutter build apk --release --no-tree-shake-icons
 
       - name: Upload Launcher APK
         uses: actions/upload-artifact@v4
