@@ -76,11 +76,24 @@ jobs:
             's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 34/' \
             android/app/build.gradle
 
-          echo "===== Install Android SDK 34 ====="
+                    echo "===== Install Android SDK 34 ====="
 
-          yes | sdkmanager --licenses >/dev/null || true
+          SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
 
-          sdkmanager \
+          if [ ! -f "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "${ANDROID_HOME}/cmdline-tools" -name sdkmanager -type f 2>/dev/null | head -n 1)"
+          fi
+
+          if [ -z "$SDKMANAGER" ] || [ ! -f "$SDKMANAGER" ]; then
+            echo "ERROR: sdkmanager was not found in Android SDK."
+            echo "ANDROID_HOME=${ANDROID_HOME}"
+            ls -la "${ANDROID_HOME}/cmdline-tools" || true
+            exit 1
+          fi
+
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+
+          "$SDKMANAGER" \
             "platforms;android-34" \
             "build-tools;34.0.0"
 
