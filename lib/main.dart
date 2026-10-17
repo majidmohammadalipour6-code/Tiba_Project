@@ -1001,72 +1001,115 @@ class RoadPainter extends CustomPainter {
     if (size.width <= 0 || size.height <= 0) return;
     final w = size.width;
     final h = size.height;
-    final horizonY = h * 0.22;
-    final centerX = w * 0.5;
-    final roadTopWidth = w * 0.12;
-    final roadBottomWidth = w * 0.82;
+    final cx = w * 0.5;
+    final horizonY = h * 0.56;
+    final topHalf = w * 0.055;
+    final bottomHalf = w * 0.48;
 
-    final roadPath = Path()
-      ..moveTo(centerX - roadTopWidth / 2, horizonY)
-      ..lineTo(centerX + roadTopWidth / 2, horizonY)
-      ..lineTo(centerX + roadBottomWidth / 2, h)
-      ..lineTo(centerX - roadBottomWidth / 2, h)
+    // Soft blue-black atmosphere behind the road, like the reference HUD.
+    final atmosphere = Paint()
+      ..shader = const RadialGradient(
+        center: Alignment(0, 0.25),
+        radius: 0.95,
+        colors: [Color(0x55205CFF), Color(0x33102048), Color(0x00030712)],
+        stops: [0.0, 0.55, 1.0],
+      ).createShader(Rect.fromLTWH(0, 0, w, h));
+    canvas.drawRect(Rect.fromLTWH(0, 0, w, h), atmosphere);
+
+    // Distant horizon glow.
+    final horizonGlow = Paint()
+      ..shader = RadialGradient(
+        center: Alignment(0, (horizonY / h) * 2 - 1),
+        radius: 0.48,
+        colors: [accent.withOpacity(0.38), const Color(0x33235BFF), Colors.transparent],
+        stops: const [0.0, 0.34, 1.0],
+      ).createShader(Rect.fromLTWH(0, horizonY - h * 0.22, w, h * 0.48));
+    canvas.drawRect(Rect.fromLTWH(0, horizonY - h * 0.22, w, h * 0.48), horizonGlow);
+
+    final road = Path()
+      ..moveTo(cx - topHalf, horizonY)
+      ..lineTo(cx + topHalf, horizonY)
+      ..lineTo(cx + bottomHalf, h)
+      ..lineTo(cx - bottomHalf, h)
       ..close();
-
     final roadPaint = Paint()
       ..shader = const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [Color(0xFF202833), Color(0xFF111821), Color(0xFF080D14)],
+        colors: [Color(0xFF101A2B), Color(0xFF07111F), Color(0xFF030812)],
       ).createShader(Rect.fromLTWH(0, horizonY, w, h - horizonY));
-    canvas.drawPath(roadPath, roadPaint);
+    canvas.drawPath(road, roadPaint);
 
-    final shoulderPaint = Paint()
-      ..color = const Color(0xFF5D6875).withOpacity(0.55)
-      ..strokeWidth = 1.6
-      ..style = PaintingStyle.stroke;
-    canvas.drawLine(Offset(centerX - roadTopWidth / 2, horizonY), Offset(centerX - roadBottomWidth / 2, h), shoulderPaint);
-    canvas.drawLine(Offset(centerX + roadTopWidth / 2, horizonY), Offset(centerX + roadBottomWidth / 2, h), shoulderPaint);
+    // Wet-road reflection bands, restrained so the road remains readable.
+    final reflection = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [Colors.transparent, accent.withOpacity(0.10), const Color(0x663C7BFF), accent.withOpacity(0.10), Colors.transparent],
+        stops: const [0.0, 0.28, 0.5, 0.72, 1.0],
+      ).createShader(Rect.fromLTWH(0, horizonY, w, h - horizonY));
+    canvas.drawPath(road, reflection);
 
-    // Subtle white road-edge markings.
-    final edgePaint = Paint()
-      ..color = Colors.white.withOpacity(0.38)
-      ..strokeWidth = 1.2
-      ..style = PaintingStyle.stroke;
-    final leftEdgeTop = Offset(centerX - roadTopWidth * 0.38, horizonY);
-    final leftEdgeBottom = Offset(centerX - roadBottomWidth * 0.42, h);
-    final rightEdgeTop = Offset(centerX + roadTopWidth * 0.38, horizonY);
-    final rightEdgeBottom = Offset(centerX + roadBottomWidth * 0.42, h);
-    canvas.drawLine(leftEdgeTop, leftEdgeBottom, edgePaint);
-    canvas.drawLine(rightEdgeTop, rightEdgeBottom, edgePaint);
+    // Perspective edge lights and road shoulders.
+    void drawPerspectiveLine(double topX, double bottomX, Color color, double width, double opacity) {
+      final p = Paint()
+        ..color = color.withOpacity(opacity)
+        ..strokeWidth = width
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round;
+      canvas.drawLine(Offset(cx + topX, horizonY), Offset(cx + bottomX, h), p);
+    }
+    drawPerspectiveLine(-topHalf, -bottomHalf * 0.94, const Color(0xFF4B7DFF), 1.4, 0.48);
+    drawPerspectiveLine(topHalf, bottomHalf * 0.94, const Color(0xFF4B7DFF), 1.4, 0.48);
+    drawPerspectiveLine(-topHalf * 0.62, -bottomHalf * 0.70, accent, 2.2, 0.92);
+    drawPerspectiveLine(topHalf * 0.62, bottomHalf * 0.70, accent, 2.2, 0.92);
 
-    // Realistic broken white center line with perspective scaling.
-    // The markings remain visible while stopped and flow toward the viewer while moving.
-    final movement = speed > 0 ? (progress * (0.18 + speed / 250.0)) : 0.0;
-    for (int i = 0; i < 9; i++) {
-      final t = ((i / 9.0) + movement) % 1.0;
-      final perspective = t * t;
-      final y = horizonY + (h - horizonY) * perspective;
-      final dashHeight = 2.5 + 25.0 * perspective;
-      final dashWidth = 1.0 + 4.0 * perspective;
+    // Neon edge glow.
+    final glowPaint = Paint()
+      ..color = accent.withOpacity(0.28)
+      ..strokeWidth = 7
+      ..style = PaintingStyle.stroke
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7);
+    canvas.drawLine(Offset(cx - topHalf * 0.62, horizonY), Offset(cx - bottomHalf * 0.70, h), glowPaint);
+    canvas.drawLine(Offset(cx + topHalf * 0.62, horizonY), Offset(cx + bottomHalf * 0.70, h), glowPaint);
+
+    // Dashed white lane markings with perspective scaling and speed-based movement.
+    final movement = speed > 0 ? (progress * (0.20 + speed / 230.0)) % 1.0 : 0.0;
+    for (int i = 0; i < 10; i++) {
+      final t = ((i / 10.0) + movement) % 1.0;
+      final p = t * t;
+      final y = horizonY + (h - horizonY) * p;
+      final dashHeight = 2.0 + h * 0.042 * p;
+      final dashWidth = 1.0 + w * 0.009 * p;
       final dashPaint = Paint()
-        ..color = Colors.white.withOpacity(0.42 + 0.48 * perspective)
+        ..color = Colors.white.withOpacity(0.20 + 0.68 * p)
         ..strokeWidth = dashWidth
         ..strokeCap = StrokeCap.round;
       final endY = (y + dashHeight).clamp(horizonY, h).toDouble();
-      canvas.drawLine(Offset(centerX, y), Offset(centerX, endY), dashPaint);
+      canvas.drawLine(Offset(cx, y), Offset(cx, endY), dashPaint);
     }
 
-    // Small, restrained roadside reflectors add depth without a neon-grid look.
-    for (int i = 0; i < 4; i++) {
-      final t = ((i / 4.0) + (speed > 0 ? progress * 0.45 : 0.0)) % 1.0;
-      final p = t * t;
-      final y = horizonY + (h - horizonY) * p;
-      final halfRoad = roadTopWidth / 2 + (roadBottomWidth / 2 - roadTopWidth / 2) * p;
-      final postHeight = 3.0 + 10.0 * p;
-      final postPaint = Paint()..color = const Color(0xFFDCE4EA).withOpacity(0.18 + p * 0.4);
-      canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(centerX - halfRoad - 5 - p * 8, y), width: 2 + p * 2, height: postHeight), const Radius.circular(1)), postPaint);
-      canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(centerX + halfRoad + 5 + p * 8, y), width: 2 + p * 2, height: postHeight), const Radius.circular(1)), postPaint);
+    // Two outer lane dashes to make the road read like a real highway.
+    for (final side in [-1.0, 1.0]) {
+      for (int i = 0; i < 7; i++) {
+        final t = ((i / 7.0) + movement * 0.8) % 1.0;
+        final p = t * t;
+        final y = horizonY + (h - horizonY) * p;
+        final x = cx + side * (topHalf * 0.6 + (bottomHalf * 0.67 - topHalf * 0.6) * p);
+        final dash = Paint()
+          ..color = const Color(0xFFB9D7FF).withOpacity(0.16 + 0.52 * p)
+          ..strokeWidth = 1 + 2.4 * p
+          ..strokeCap = StrokeCap.round;
+        canvas.drawLine(Offset(x, y), Offset(x, (y + 2 + h * 0.025 * p).clamp(y, h).toDouble()), dash);
+      }
+    }
+
+    // Small horizon light points create a distant road / city feel.
+    final dots = Paint()..color = const Color(0xFF7FCFFF).withOpacity(0.58);
+    for (int i = 0; i < 13; i++) {
+      final x = w * (0.12 + i * 0.063);
+      final y = horizonY - h * (0.025 + (i % 3) * 0.009);
+      canvas.drawCircle(Offset(x, y), i % 3 == 0 ? 1.5 : 0.8, dots);
     }
   }
 
