@@ -44,8 +44,6 @@ jobs:
           APP_GRADLE="android/app/build.gradle"
           WRAPPER="android/gradle/wrapper/gradle-wrapper.properties"
 
-          echo "Configuring Android Gradle Plugin and Kotlin..."
-
           sed -i -E \
             's/(id "com\.android\.application" version ")[^"]+"/\18.3.2"/' \
             "$SETTINGS"
@@ -54,13 +52,9 @@ jobs:
             's/(id "org\.jetbrains\.kotlin\.android" version ")[^"]+"/\11.9.22"/' \
             "$SETTINGS"
 
-          echo "Configuring Gradle wrapper..."
-
           sed -i -E \
             's#gradle-[0-9.]+-all.zip#gradle-8.4-all.zip#' \
             "$WRAPPER"
-
-          echo "Configuring Android SDK..."
 
           sed -i -E \
             's/compileSdk = flutter\.compileSdkVersion/compileSdk = 34/' \
@@ -77,8 +71,6 @@ jobs:
           sed -i -E \
             's/targetSdkVersion flutter\.targetSdkVersion/targetSdkVersion 34/' \
             "$APP_GRADLE"
-
-          echo "Installing Android SDK 34..."
 
           SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
 
@@ -97,17 +89,21 @@ jobs:
             "platforms;android-34" \
             "build-tools;34.0.0"
 
-          echo "Android configuration completed."
-
       - name: Configure Android Manifest
         run: |
           cd tiba_project
 
           python3 - <<'PY'
           from pathlib import Path
+          import xml.etree.ElementTree as ET
 
           p = Path("android/app/src/main/AndroidManifest.xml")
-          s = p.read_text()
+          ET.register_namespace("android", "http://schemas.android.com/apk/res/android")
+
+          tree = ET.parse(p)
+          root = tree.getroot()
+
+          android = "{http://schemas.android.com/apk/res/android}"
 
           permissions = [
               "android.permission.ACCESS_FINE_LOCATION",
@@ -115,15 +111,160 @@ jobs:
               "android.permission.QUERY_ALL_PACKAGES",
               "android.permission.READ_EXTERNAL_STORAGE",
               "android.permission.READ_MEDIA_AUDIO",
+              "android.permission.RECEIVE_BOOT_COMPLETED",
           ]
 
-          for permission in permissions:
-              tag = f'<uses-permission android:name="{permission}" />'
-              if permission not in s:
-                  s = s.replace("<application", tag + "\n    <application", 1)
+          existing = {
+              item.get(android + "name")
+              for item in root.findall("uses-permission")
+          }
 
-          p.write_text(s)
+          for permission in permissions:
+              if permission not in existing:
+                  item = ET.Element(
+                      "uses-permission",
+                      {android + "name": permission}
+                  )
+                  root.insert(0, item)
+
+          application = root.find("application")
+          if application is None:
+              raise RuntimeError("Android application element not found")
+
+          activity = None
+          for item in application.findall("activity"):
+              name = item.get(android + "name", "")
+              if name.endswith("MainActivity"):
+                  activity = item
+                  break
+
+          if activity is None:
+              raise RuntimeError("MainActivity not found")
+
+          activity.set(android + "exported", "true")
+
+          # Keep the normal app icon/launcher intent filter.
+          # Add a separate HOME intent filter.
+          has_home_filter = False
+
+          for intent_filter in activity.findall("intent-filter"):
+              actions = {
+                  x.get(android + "name")
+                  for x in intent_filter.findall("action")
+              }
+              categories = {
+                  x.get(android + "name")
+                  for x in intent_filter.findall("category")
+              }
+
+              if (
+                  "android.intent.action.MAIN" in actions
+                  and "android.intent.category.HOME" in categories
+              ):
+                  has_home_filter = True
+
+          if not has_home_filter:
+              intent_filter = ET.SubElement(activity, "intent-filter")
+              ET.SubElement(
+                  intent_filter,
+                  "action",
+                  {android + "name": "android.intent.action.MAIN"}
+              )
+              ET.SubElement(
+                  intent_filter,
+                  "category",
+                  {android + "name": "android.intent.category.HOME"}
+              )
+              ET.SubElement(
+                  intent_filter,
+                  "category",
+                  {android + "name": "android.intent.category.DEFAULT"}
+              )
+
+          # Add a receiver to start the launcher after device boot.
+          receiver = None
+
+          for item in application.findall("receiver"):
+              if item.get(android + "name") == ".BootReceiver":
+                  receiver = item
+                  break
+
+          if receiver is None:
+              receiver = ET.SubElement(
+                  application,
+                  "receiver",
+                  {
+                      android + "name": ".BootReceiver",
+                      android + "enabled": "true",
+                      android + "exported": "true"
+                  }
+              )
+
+          receiver_filter = None
+          for item in receiver.findall("intent-filter"):
+              if any(
+                  action.get(android + "name")
+                  == "android.intent.action.BOOT_COMPLETED"
+                  for action in item.findall("action")
+              ):
+                  receiver_filter = item
+                  break
+
+          if receiver_filter is None:
+              receiver_filter = ET.SubElement(receiver, "intent-filter")
+              ET.SubElement(
+                  receiver_filter,
+                  "action",
+                  {android + "name": "android.intent.action.BOOT_COMPLETED"}
+              )
+
+          p.write_text(
+              '<?xml version="1.0" encoding="utf-8"?>\n'
+              + ET.tostring(root, encoding="unicode")
+          )
           PY
+
+      - name: Create Boot Receiver
+        run: |
+          cd tiba_project
+
+          KT_PATH="android/app/src/main/kotlin/com/tiba2/tiba_project"
+          mkdir -p "$KT_PATH"
+
+          cat > "$KT_PATH/BootReceiver.kt" <<'EOF'
+          package com.tiba2.tiba_project
+
+          import android.content.BroadcastReceiver
+          import android.content.Context
+          import android.content.Intent
+
+          class BootReceiver : BroadcastReceiver() {
+              override fun onReceive(context: Context, intent: Intent) {
+                  if (
+                      intent.action == Intent.ACTION_BOOT_COMPLETED ||
+                      intent.action == Intent.ACTION_LOCKED_BOOT_COMPLETED
+                  ) {
+                      val launchIntent =
+                          context.packageManager.getLaunchIntentForPackage(
+                              context.packageName
+                          )
+
+                      if (launchIntent != null) {
+                          launchIntent.addFlags(
+                              Intent.FLAG_ACTIVITY_NEW_TASK or
+                              Intent.FLAG_ACTIVITY_CLEAR_TOP
+                          )
+
+                          try {
+                              context.startActivity(launchIntent)
+                          } catch (e: Exception) {
+                              e.printStackTrace()
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
 
       - name: Configure Vehicle Native Actions
         run: |
@@ -205,7 +346,9 @@ jobs:
                                           Intent.ACTION_VIEW,
                                           Uri.parse("geo:0,0?q=")
                                       )
-                                      startActivity(Intent.createChooser(intent, "انتخاب مسیریاب"))
+                                      startActivity(
+                                          Intent.createChooser(intent, "انتخاب مسیریاب")
+                                      )
                                       result.success(true)
                                   } catch (e: Exception) {
                                       result.success(false)
@@ -258,7 +401,9 @@ jobs:
                                   val intent = Intent(Intent.ACTION_MAIN).apply {
                                       addCategory(Intent.CATEGORY_LAUNCHER)
                                   }
-                                  startActivity(Intent.createChooser(intent, "برنامه‌ها"))
+                                  startActivity(
+                                      Intent.createChooser(intent, "برنامه‌ها")
+                                  )
                                   result.success(true)
                               } catch (e: Exception) {
                                   result.success(false)
@@ -304,7 +449,8 @@ jobs:
               }
 
               private fun checkAndRequestLocation() {
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+                  if (
+                      Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
                       checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) !=
                       PackageManager.PERMISSION_GRANTED
                   ) {
@@ -326,9 +472,14 @@ jobs:
                   permissions: Array<out String>,
                   grantResults: IntArray
               ) {
-                  super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+                  super.onRequestPermissionsResult(
+                      requestCode,
+                      permissions,
+                      grantResults
+                  )
 
-                  if (requestCode == PERMISSION_REQUEST_CODE &&
+                  if (
+                      requestCode == PERMISSION_REQUEST_CODE &&
                       grantResults.isNotEmpty() &&
                       grantResults[0] == PackageManager.PERMISSION_GRANTED
                   ) {
