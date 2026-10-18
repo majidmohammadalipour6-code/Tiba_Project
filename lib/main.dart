@@ -564,43 +564,139 @@ class _LauncherHomeState extends State<LauncherHome>
       body: Container(
         decoration: const BoxDecoration(
           gradient: RadialGradient(
-            center: Alignment(0.0, -0.2),
-            radius: 1.2,
-            colors: [Color(0xFF0D1B2A), Color(0xFF030712)],
+            center: Alignment(0.0, -0.25),
+            radius: 1.25,
+            colors: [Color(0xFF102C59), Color(0xFF061226), Color(0xFF01040B)],
+            stops: [0.0, 0.55, 1.0],
           ),
         ),
-        child: SafeArea(
-          child: Row(
-            children: [
-              _buildSidebar(),
-              Expanded(
-                flex: 4,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      vertical: 12, horizontal: 8),
-                  child: _buildNavCard(),
-                ),
+        child: Stack(
+          children: [
+            const Positioned.fill(child: _AmbientGlow()),
+            SafeArea(
+              child: Column(
+                children: [
+                  _buildTopStatusBar(),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        _buildSidebar(),
+                        Expanded(
+                          flex: 4,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 5),
+                            child: _buildNavCard(),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 6,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 5),
+                            child: _buildCenterDashboard(speed),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 4,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 5),
+                            child: _buildRightCarPanel(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _buildBottomDock(),
+                ],
               ),
-              Expanded(
-                flex: 6,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      vertical: 12, horizontal: 8),
-                  child: _buildCenterDashboard(speed),
-                ),
-              ),
-              Expanded(
-                flex: 4,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      vertical: 12, horizontal: 8),
-                  child: _buildRightCarPanel(),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _buildTopStatusBar() {
+    return Container(
+      height: 43,
+      margin: const EdgeInsets.fromLTRB(10, 3, 10, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xCC030B1A),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: _neonColor.withOpacity(0.32 * _neonIntensity)),
+        boxShadow: [BoxShadow(color: _neonColor.withOpacity(0.08), blurRadius: 14)],
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.bolt, color: _neonColor, size: 23),
+          const SizedBox(width: 10),
+          Text(_timeString, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(width: 12),
+          const Icon(Icons.signal_cellular_alt, color: Colors.white70, size: 17),
+          const SizedBox(width: 6),
+          const Text('LTE', style: TextStyle(color: Colors.white70, fontSize: 12)),
+          const Spacer(),
+          const Icon(Icons.wifi, color: Colors.white70, size: 20),
+          const SizedBox(width: 12),
+          const Icon(Icons.bluetooth, color: Colors.white70, size: 19),
+          const SizedBox(width: 14),
+          Icon(Icons.battery_charging_full, color: _neonColor, size: 20),
+          const SizedBox(width: 5),
+          const Text('TIBA 2', style: TextStyle(color: Colors.white, fontSize: 18, letterSpacing: 2.0, fontWeight: FontWeight.w900)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomDock() {
+    Widget dockItem(IconData icon, String label, VoidCallback action, {bool active = false}) {
+      return Expanded(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
+          child: InkWell(
+            onTap: action,
+            borderRadius: BorderRadius.circular(15),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              decoration: BoxDecoration(
+                color: active ? _neonColor.withOpacity(0.16) : const Color(0xCC071327),
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(color: _neonColor.withOpacity(active ? 0.9 : 0.25)),
+                boxShadow: active ? [BoxShadow(color: _neonColor.withOpacity(0.22), blurRadius: 14)] : null,
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, color: active ? _neonColor : Colors.white70, size: 24),
+                  const SizedBox(height: 3),
+                  Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: active ? Colors.white : Colors.white70, fontSize: 10, fontWeight: active ? FontWeight.bold : FontWeight.normal)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    return Container(
+      height: 76,
+      margin: const EdgeInsets.fromLTRB(76, 2, 10, 6),
+      padding: const EdgeInsets.symmetric(horizontal: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xDD020916),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _neonColor.withOpacity(0.65 * _neonIntensity), width: 1.3),
+        boxShadow: [BoxShadow(color: _neonColor.withOpacity(0.13), blurRadius: 20)],
+      ),
+      child: Row(children: [
+        dockItem(Icons.map_outlined, 'نقشه', () => _launchIntent('nav', pkg: _selectedNav)),
+        dockItem(Icons.music_note, 'موسیقی', () => _launchIntent('music'), active: true),
+        dockItem(Icons.phone, 'تماس', () => _launchIntent('phone')),
+        dockItem(Icons.radio, 'رادیو', () => _launchIntent('radio')),
+        dockItem(Icons.ondemand_video, 'ویدئو', () => _launchIntent('video')),
+        dockItem(Icons.directions_car, 'تنظیمات خودرو', _openSettingsDialog),
+        dockItem(Icons.apps, 'بیشتر', () => _launchIntent('apps')),
+      ]),
     );
   }
 
@@ -739,7 +835,7 @@ class _LauncherHomeState extends State<LauncherHome>
               'TIBA 2',
               style: TextStyle(
                 color: _neonColor,
-                fontSize: 22,
+                fontSize: 24,
                 letterSpacing: 4,
                 fontWeight: FontWeight.w900,
                 shadows: [
@@ -987,6 +1083,39 @@ class _LauncherHomeState extends State<LauncherHome>
       ),
     );
   }
+}
+
+class _AmbientGlow extends StatelessWidget {
+  const _AmbientGlow();
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+    child: CustomPaint(painter: _AmbientGlowPainter(), child: const SizedBox.expand()),
+  );
+}
+
+class _AmbientGlowPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final glow = Paint()
+      ..shader = const RadialGradient(
+        center: Alignment(0.02, 0.10),
+        radius: 0.92,
+        colors: [Color(0x442A70FF), Color(0x22204B9B), Color(0x00000000)],
+        stops: [0.0, 0.48, 1.0],
+      ).createShader(rect);
+    canvas.drawRect(rect, glow);
+    final streakPaint = Paint()
+      ..color = const Color(0xFF168CFF).withOpacity(0.20)
+      ..strokeWidth = 1.2
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+    for (int i = 0; i < 5; i++) {
+      final y = size.height * (0.12 + i * 0.17);
+      canvas.drawLine(Offset(size.width * 0.20, y), Offset(size.width * 0.80, y - 7), streakPaint);
+    }
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class RoadPainter extends CustomPainter {
