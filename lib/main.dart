@@ -876,7 +876,7 @@ class _LauncherHomeState extends State<LauncherHome>
               ),
               LayoutBuilder(
                 builder: (context, constraints) {
-                  final gaugeWidth = (constraints.maxWidth * 0.94).clamp(230.0, 360.0);
+                  final gaugeWidth = (constraints.maxWidth * 1.0).clamp(260.0, 460.0);
                   return SizedBox(
                     width: gaugeWidth,
                     height: constraints.maxHeight,
@@ -897,12 +897,12 @@ class _LauncherHomeState extends State<LauncherHome>
                           mainAxisAlignment: MainAxisAlignment.center,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const SizedBox(height: 20),
+                            const SizedBox(height: 38),
                             Text(
                               '$speed',
                               style: TextStyle(
                                 color: Colors.white,
-                                fontSize: 68,
+                                fontSize: 62,
                                 height: 1.0,
                                 fontWeight: FontWeight.w900,
                                 shadows: [
@@ -966,7 +966,6 @@ class _LauncherHomeState extends State<LauncherHome>
             ],
           ),
         ),
-        _buildBottomPlayerBar(),
       ],
     );
   }
@@ -1023,64 +1022,132 @@ class _LauncherHomeState extends State<LauncherHome>
   }
 
   Widget _buildRightCarPanel() {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF0A0F1D).withOpacity(0.7),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-            color: _neonColor.withOpacity(0.3 * _neonIntensity)),
-      ),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        children: [
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _neonColor.withOpacity(0.15),
-              side: BorderSide(color: _neonColor),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              minimumSize: const Size(double.infinity, 44),
-            ),
-            onPressed: _pickMusicFiles,
-            icon: const Icon(Icons.folder_open, color: Colors.white),
-            label: const Text('پوشه موزیک / فلش',
-                style: TextStyle(color: Colors.white, fontSize: 13)),
+    return Column(
+      children: [
+        // Music player is now at the top-right, with a cover-art tile.
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: const Color(0xE6081020),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: _neonColor.withOpacity(0.38 * _neonIntensity)),
+            boxShadow: [BoxShadow(color: _neonColor.withOpacity(0.08), blurRadius: 16)],
           ),
-          const Spacer(),
-          Transform.scale(
-            scale: 1.18,
-            child: Image.asset(
-            'tiba2.png',
-            fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => Center(
-              child: Icon(Icons.directions_car,
-                  size: 90,
-                  color: _neonColor.withOpacity(0.5 * _neonIntensity)),
-            ),
-          ),
-          ),
-          const Spacer(),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              IconButton(
-                icon: const Icon(Icons.music_note, color: Colors.white70),
-                onPressed: () => _launchIntent('music'),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: BorderSide(color: _neonColor.withOpacity(0.8)),
+                    backgroundColor: _neonColor.withOpacity(0.08),
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+                  ),
+                  onPressed: _pickMusicFiles,
+                  icon: const Icon(Icons.folder_open, size: 19),
+                  label: const Text('انتخاب پوشه / آهنگ', maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12)),
+                ),
               ),
-              IconButton(
-                tooltip: 'تنظیمات اصلی',
-                icon: const Icon(Icons.tune, color: Colors.white70),
-                onPressed: _openSettingsDialog,
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Container(
+                    width: 74,
+                    height: 74,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [_neonColor.withOpacity(0.55), const Color(0xFF111A35), const Color(0xFF050914)],
+                      ),
+                      border: Border.all(color: _neonColor.withOpacity(0.5)),
+                    ),
+                    child: Icon(Icons.album_rounded, size: 42, color: Colors.white.withOpacity(0.9)),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('در حال پخش', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                        const SizedBox(height: 4),
+                        Text(_currentTrackTitle, maxLines: 2, overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                        const SizedBox(height: 3),
+                        Text(_tracks.isEmpty ? 'آهنگی انتخاب نشده' : 'ترک ${_currentTrackIndex + 1} از ${_tracks.length}',
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white54, fontSize: 10)),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              IconButton(
-                tooltip: 'رنگ و نور',
-                icon: Icon(Icons.palette_outlined, color: _neonColor),
-                onPressed: _openNeonSettings,
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(visualDensity: VisualDensity.compact, onPressed: _prevTrack,
+                      icon: const Icon(Icons.skip_previous, color: Colors.white, size: 25)),
+                  IconButton(visualDensity: VisualDensity.compact, onPressed: _togglePlayPause,
+                      icon: Icon(_isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
+                          color: _neonColor, size: 40)),
+                  IconButton(visualDensity: VisualDensity.compact, onPressed: _nextTrack,
+                      icon: const Icon(Icons.skip_next, color: Colors.white, size: 25)),
+                ],
               ),
             ],
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 10),
+        Expanded(
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0x55030A16),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _neonColor.withOpacity(0.22 * _neonIntensity)),
+            ),
+            child: Stack(
+              alignment: Alignment.bottomCenter,
+              children: [
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 105,
+                    child: Image.asset(
+                      'tiba2.png',
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => Icon(Icons.directions_car,
+                          size: 72, color: _neonColor.withOpacity(0.5)),
+                    ),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.topRight,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(tooltip: 'موسیقی', onPressed: () => _launchIntent('music'),
+                          icon: const Icon(Icons.music_note, color: Colors.white70, size: 20)),
+                      IconButton(tooltip: 'تنظیمات', onPressed: _openSettingsDialog,
+                          icon: const Icon(Icons.tune, color: Colors.white70, size: 20)),
+                      IconButton(tooltip: 'رنگ و نور', onPressed: _openNeonSettings,
+                          icon: Icon(Icons.palette_outlined, color: _neonColor, size: 20)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1258,25 +1325,25 @@ class SpeedGaugePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (size.width <= 0 || size.height <= 0) return;
-    // Move the gauge upward so it sits closer beneath the TIBA 2 title.
+    // Nearly circular speedometer; the lower portion visually meets the road.
     final center = Offset(size.width / 2, size.height * 0.43);
-    final radius = math.min(size.width * 0.39, size.height * 0.42);
+    final radius = math.min(size.width * 0.405, size.height * 0.405);
     final rect = Rect.fromCircle(center: center, radius: radius);
-    const startAngle = 3.49; // lower-left, measured from the positive x-axis
-    const sweepAngle = 2.44; // upper arc ending at lower-right
+    const startAngle = 2.35619449; // 135 degrees: lower-left endpoint
+    const sweepAngle = -4.71238898; // 270-degree dial, opening toward the bottom
     final basePaint = Paint()
       ..color = Colors.white.withOpacity(0.17)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 7
+      ..strokeWidth = 8
       ..strokeCap = StrokeCap.round;
     canvas.drawArc(rect, startAngle, sweepAngle, false, basePaint);
 
-    final fraction = (speed / maxSpeed).clamp(0.0, 1.0);
+    final fraction = (speed / 240.0).clamp(0.0, 1.0);
     if (fraction > 0) {
       final activePaint = Paint()
         ..color = color.withOpacity((0.5 + 0.5 * intensity).clamp(0.0, 1.0))
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 7
+        ..strokeWidth = 8
         ..strokeCap = StrokeCap.round
         ..maskFilter = intensity > 0.2 ? const MaskFilter.blur(BlurStyle.normal, 3) : null;
       canvas.drawArc(rect, startAngle, sweepAngle * fraction, false, activePaint);
@@ -1295,8 +1362,8 @@ class SpeedGaugePainter extends CustomPainter {
         ..color = (i / 20 <= fraction && fraction > 0 ? color : Colors.white).withOpacity(major ? 0.88 : 0.36)
         ..strokeWidth = major ? 2.0 : 1.0;
       canvas.drawLine(p1, p2, tickPaint);
-      if (major) {
-        final labelRadius = radius - 27;
+      if (i % 2 == 0) {
+        final labelRadius = radius - 29;
         final labelPoint = Offset(center.dx + mathCos(angle) * labelRadius, center.dy + mathSin(angle) * labelRadius);
         final tp = TextPainter(text: TextSpan(text: '${i * 10}', style: labelStyle), textDirection: TextDirection.ltr)..layout();
         tp.paint(canvas, Offset(labelPoint.dx - tp.width / 2, labelPoint.dy - tp.height / 2));
