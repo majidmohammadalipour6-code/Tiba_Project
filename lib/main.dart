@@ -1846,7 +1846,7 @@ class SpeedGaugePainter extends CustomPainter {
           ),
         );
       }
-    }
+    } 
   }
 
   @override
