@@ -1344,21 +1344,30 @@ class _LauncherHomeState extends State<LauncherHome>
             ],
           ),
         ),
-        const SizedBox(height: 8),
+                const SizedBox(height: 8),
 
-        // تصویر ماشین بدون قاب؛ از تمام فضای باقی‌مانده استفاده می‌کند.
+        // تصویر ماشین بدون قاب؛ با سایز بزرگ‌تر و متمایل به پایین
         Expanded(
           child: Stack(
             alignment: Alignment.center,
             children: [
               Positioned.fill(
-                child: Image.asset(
-                  'tiba2.png',
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => Icon(
-                    Icons.directions_car,
-                    size: 150,
-                    color: _neonColor.withOpacity(0.7),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 14.0, bottom: 4.0),
+                  child: Transform.translate(
+                    offset: const Offset(0, 16),
+                    child: Transform.scale(
+                      scale: 1.25,
+                      child: Image.asset(
+                        'tiba2.png',
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => Icon(
+                          Icons.directions_car,
+                          size: 200,
+                          color: _neonColor.withOpacity(0.7),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -1400,10 +1409,8 @@ class _LauncherHomeState extends State<LauncherHome>
               ),
             ],
           ),
-        ),
-      ],
-    );
-  }
+       ),
+
 }
 
 class _AmbientGlow extends StatelessWidget {
