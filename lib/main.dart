@@ -1344,7 +1344,7 @@ class _LauncherHomeState extends State<LauncherHome>
             ],
           ),
         ),
-                const SizedBox(height: 8),
+        const SizedBox(height: 8),
 
         // تصویر ماشین بدون قاب؛ با سایز بزرگ‌تر و متمایل به پایین
         Expanded(
@@ -1409,8 +1409,10 @@ class _LauncherHomeState extends State<LauncherHome>
               ),
             ],
           ),
-       ),
-
+        ),
+      ],
+    );
+  }
 }
 
 class _AmbientGlow extends StatelessWidget {
