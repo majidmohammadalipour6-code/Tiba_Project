@@ -1120,12 +1120,12 @@ class _LauncherHomeState extends State<LauncherHome>
                   alignment: Alignment.bottomCenter,
                   child: SizedBox(
                     width: double.infinity,
-                    height: 105,
+                    height: 175,
                     child: Image.asset(
                       'tiba2.png',
                       fit: BoxFit.contain,
                       errorBuilder: (_, __, ___) => Icon(Icons.directions_car,
-                          size: 72, color: _neonColor.withOpacity(0.5)),
+                          size: 110, color: _neonColor.withOpacity(0.5)),
                     ),
                   ),
                 ),
@@ -1329,8 +1329,8 @@ class SpeedGaugePainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height * 0.43);
     final radius = math.min(size.width * 0.405, size.height * 0.405);
     final rect = Rect.fromCircle(center: center, radius: radius);
-    const startAngle = 2.35619449; // 135 degrees: lower-left endpoint
-    const sweepAngle = -4.71238898; // 270-degree dial, opening toward the bottom
+    const startAngle = 0.78539816; // 45 degrees: lower-right endpoint
+    const sweepAngle = -4.71238898; // 270-degree dial, opening centered at the bottom over the road
     final basePaint = Paint()
       ..color = Colors.white.withOpacity(0.17)
       ..style = PaintingStyle.stroke
